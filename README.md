@@ -15,7 +15,7 @@ Stash1099 turns every payout into a paycheck: **tax withheld, the rest really yo
 
 1. **Landing:** type two numbers (1099 income so far, checking balance) → see what is really yours, computed by the real engine.
 2. **/start:** a 7-step quiz → personal result: "You have already spent $X of the IRS's money", April bill, tax-ready score, your next $1,000 payout as a pay stub, a plan for this week, Pro plans.
-3. **/plan?demo=maya** (freelance UX designer + DoorDash, Austin): safe to spend **−$1,257** on $4,200 in checking; **I just got paid $1,200 → pay stub: $170 SE tax + $107 federal income tax withheld, $923 take-home**; tax-ready score 47; "Unlock the catch-up plan" → paywall → demo checkout → Pro.
+3. **/plan?demo=maya** (freelance UX designer + DoorDash, Austin): safe to spend **−$1,257** on $4,200 in checking; **I just got paid $1,200 → pay stub: $170 SE tax + $107 federal income tax withheld, $923 take-home** (safe to spend rises by exactly $923; moving the $277 to savings leaves it unchanged); tax-ready score 47; "Unlock the catch-up plan" → paywall → demo checkout → Pro.
 
 ## What it computes (real IRS math, no hardcoded results)
 
@@ -52,7 +52,7 @@ src/lib/exportCsv.ts        tax-pro summary
 src/components/Quiz.tsx     /start quiz → personal result → paywall
 src/components/PlanApp.tsx  the app
 src/components/ProGate.tsx  paywall (1/4/12 weeks, price per day, demo checkout)
-e2e/checks.mjs              107 end-to-end checks in a real Chrome (ru-RU locale)
+e2e/checks.mjs              108 end-to-end checks in a real Chrome (ru-RU locale)
 docs/Stash1099-pitch.pdf    pitch deck
 ```
 
@@ -64,7 +64,7 @@ npm run dev     # http://localhost:3000
 npm test        # 86 unit tests: tax engine vs hand-computed returns (single/MFJ/HoH, SS wage base,
                 #   add'l Medicare, QBI limit, tips, child tax credit), penalty cases, accrual, pay stub,
                 #   score, catch-up, safe-to-spend, 4 bank CSV formats, parser, share link
-npm run e2e     # 107 end-to-end checks against the live site: landing widget, quiz funnel, paywall,
+npm run e2e     # 108 end-to-end checks against the live site: landing widget, quiz funnel, paywall,
                 #   every button, demo math consistency, CSV import, calendar, export, mobile, a11y,
                 #   no third-party requests, no console/hydration errors, repo + PDF
 ```

@@ -262,14 +262,19 @@ export default function PlanApp() {
                   setState((s) => ({
                     ...s,
                     payments: [...s.payments, { id: newId(), date: today, source: source || "New payment", amount }],
+                    // The payout lands in checking: the whole gross is there until the tax part is moved out.
+                    checkingBalance: s.checkingBalance == null ? s.checkingBalance : s.checkingBalance + amount,
                   }))
                 }
                 onStash={(amount) => {
                   setState((s) => ({
                     ...s,
                     stashDeposits: [...s.stashDeposits, { id: newId(), date: today, amount }],
+                    // Moved out of checking into tax savings, so safe-to-spend does not change.
+                    checkingBalance:
+                      s.checkingBalance == null ? s.checkingBalance : Math.max(0, s.checkingBalance - amount),
                   }));
-                  setToast(`Logged ${usd(amount)} in your tax savings`);
+                  setToast(`Moved ${usd(amount)} from checking to tax savings`);
                 }}
               />
 

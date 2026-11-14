@@ -349,6 +349,12 @@ await check("I just got paid $1,200 → pay stub: $923 yours / $277 withheld", a
   const fit = money(await grab(page, /Federal income tax\s+(\$[\d,]+)/));
   expect(y + s === 1200 && se + fit === s && (!DEMO_DAY || (y === 923 && s === 277)), `${y}/${s} (${se}+${fit})`);
 });
+await check("Payout raises checking by $1,200 and safe-to-spend by exactly the take-home", async () => {
+  const t = await text(page);
+  const safe = money(t.match(/SAFE TO SPEND\s+(-?\$[\d,]+)/i)?.[1] ?? "x");
+  const y = money(await grab(page, /Yours to spend\s+(\$[\d,]+)/));
+  expect(!DEMO_DAY || Math.abs(safe - (-1257 + y)) <= 1, `safe ${safe}, take-home ${y}`);
+});
 await check("Payout added to the log (16 rows, +$1,200)", async () => {
   expect((await read.rows(page)) === 16 && money(await read.received(page)) === 52810, "not added");
 });
@@ -357,6 +363,11 @@ await check("'I moved' logs the stash and raises covered", async () => {
   await clickButton(page, /^I moved \$/);
   const t = await text(page);
   expect(/✓ \$[\d,]+ logged/.test(t) && money(await read.covered(page)) > before, "not logged");
+});
+await check("Moving the withheld part to savings leaves safe-to-spend unchanged", async () => {
+  const t = await text(page);
+  const safe = money(t.match(/SAFE TO SPEND\s+(-?\$[\d,]+)/i)?.[1] ?? "x");
+  expect(!DEMO_DAY || Math.abs(safe - (-1257 + 923)) <= 1, `safe ${safe}`);
 });
 await check("'Pay it all now' covers the full federal balance", async () => {
   await clickButton(page, /^Pay it all now$/);
