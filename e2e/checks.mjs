@@ -7,6 +7,9 @@
  * Runs with a Russian browser locale on purpose (the jury's machines), so number
  * formatting / hydration bugs that only show up outside en-US are caught.
  */
+import { writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import puppeteer from "puppeteer-core";
 
 const BASE = (process.env.BASE ?? "https://stash1099.vercel.app").replace(/\/$/, "");
@@ -522,6 +525,27 @@ await check("Extreme income ($1,000,000) stays sane", async () => {
 await check("Zero-income edge: results hidden, no NaN", async () => {
   await clickButton(fresh, /^Reset$/);
   expect(!/NaN|Infinity/.test(await text(fresh)), "NaN");
+});
+
+await check("Real file upload: a Bank of America CSV through the file picker", async () => {
+  const file = join(tmpdir(), "stash1099-e2e-boa.csv");
+  writeFileSync(
+    file,
+    [
+      "Date,Description,Amount,Running Bal.",
+      `10/05/2026,"LYFT INC DES:PAYMENT ID:1",310.20,1310.20`,
+      `10/06/2026,"TARGET T-1234",-45.00,1265.20`,
+      `10/07/2026,"ZELLE PAYMENT FROM JOHN",200.00,1465.20`,
+    ].join("\n"),
+  );
+  const input = await fresh.$("input[type=file]");
+  expect(input, "file input not found");
+  await input.uploadFile(file);
+  await sleep(700);
+  expect(/Bank of America: 2 deposits found, 1 spending rows ignored/.test(await text(fresh)), "file not parsed");
+  await clickButton(fresh, /^Add 1 payouts/);
+  await sleep(300);
+  expect(money(await read.received(fresh)) === 310 && /Your payment plan/.test(await text(fresh)), "payout not added");
 });
 
 /* ===== E. Mobile ===== */
