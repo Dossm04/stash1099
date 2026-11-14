@@ -33,6 +33,14 @@ const STEPS = [
 
 const DIFF = [
   [
+    "Your real rate, not “save 30%”",
+    "Each payout is quoted at the exact tax it adds: SE tax plus your bracket, after the standard deduction, QBI and tips. Early in the year that can be 14%; later, 22%+.",
+  ],
+  [
+    "A stash that tells you if you’re behind",
+    "Log what you moved to tax savings. One bar shows how much of this year’s tax is covered and exactly how much to move to catch up.",
+  ],
+  [
     "Penalty-proof minimum",
     "We find the cheapest legal safe harbor (90% of this year or 100–110% of last year) so you keep more cash until April.",
   ],
@@ -98,15 +106,15 @@ export default function Home() {
             <div className="mt-3 grid grid-cols-2 gap-2 text-center">
               <div className="rounded-xl bg-surface-2 p-3">
                 <div className="text-xs text-muted">Hers to spend</div>
-                <div className="tnum text-2xl font-bold">$998</div>
+                <div className="tnum text-2xl font-bold">$933</div>
               </div>
               <div className="rounded-xl bg-brand p-3 text-brand-ink">
                 <div className="text-xs opacity-80">Tax savings</div>
-                <div className="tnum text-2xl font-bold">$202</div>
+                <div className="tnum text-2xl font-bold">$267</div>
               </div>
             </div>
             <div className="mt-3 rounded-xl bg-danger-soft p-3 text-sm text-danger">
-              She missed 2 quarterly payments: <b>$49 penalty already</b>, $153 by April if she does nothing.
+              She missed 2 quarterly payments: <b>~$50 penalty already</b>, $153 by April if she does nothing.
             </div>
           </div>
         </div>

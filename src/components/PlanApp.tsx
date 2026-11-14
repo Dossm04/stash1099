@@ -3,10 +3,12 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { FILING_STATUS_LABEL, TAX_2026, type FilingStatus } from "@/lib/tax/config2026";
-import { buildPlan, splitPayment } from "@/lib/tax/engine";
+import { buildPlan } from "@/lib/tax/engine";
+import { quotePayout } from "@/lib/quote";
 import { formatShort, todayLocal } from "@/lib/tax/dates";
 import { newId, parsePayments } from "@/lib/parsePayments";
 import { buildIcs } from "@/lib/ics";
+import { stashStatus, type StashStatus } from "@/lib/stash";
 import {
   EMPTY_STATE,
   MAYA_STATE,
@@ -48,9 +50,18 @@ export default function PlanApp() {
   }, [toast]);
 
   const plan = useMemo(() => buildPlan({ ...state, asOf: today }), [state, today]);
+  const stash = useMemo(
+    () => stashStatus(state.payments, state.stashDeposits, state.estimatedPayments, plan, today),
+    [state, plan, today],
+  );
   const set = <K extends keyof PlanState>(k: K, v: PlanState[K]) => setState((s) => ({ ...s, [k]: v }));
 
   const hasIncome = state.payments.length > 0 || (state.expectedRestOfYear ?? 0) > 0;
+  // Marginal set-aside rate for the next payout (what each new dollar really costs in tax).
+  const nextRate = useMemo(
+    () => (hasIncome ? quotePayout(state, 1000, today).stash / 1000 : 0),
+    [state, today, hasIncome],
+  );
 
   return (
     <div className="min-h-screen">
@@ -195,28 +206,59 @@ export default function PlanApp() {
             </div>
           </Step>
 
-          <Step n={5} title="Estimated tax you already paid the IRS" hint="Form 1040-ES / Direct Pay payments for 2026.">
-            <EstimatedLog state={state} setState={setState} today={today} />
+          <Step
+            n={5}
+            title="Your tax money"
+            hint="What you moved to a separate tax savings account, and what you already sent the IRS (Form 1040-ES / Direct Pay)."
+          >
+            <div className="space-y-5">
+              <AmountLog
+                field="stashDeposits"
+                label="Moved to tax savings"
+                empty="Nothing yet. Tip: open a free high-yield savings account just for taxes."
+                state={state}
+                setState={setState}
+                today={today}
+              />
+              <AmountLog
+                field="estimatedPayments"
+                label="Paid to the IRS for 2026"
+                empty="No payments yet. That is common in year one."
+                state={state}
+                setState={setState}
+                today={today}
+              />
+            </div>
           </Step>
         </div>
 
         {/* ------------------------------ RESULTS ----------------------------- */}
         <div className={`min-w-0 space-y-4 lg:sticky lg:top-4 lg:self-start ${hasIncome ? "order-first lg:order-none" : ""}`}>
           <JustGotPaid
-            rate={plan.setAsideRate}
+            quote={(amount) => quotePayout(state, amount, today)}
             onAdd={(amount, source) => {
               setState((s) => ({
                 ...s,
                 payments: [...s.payments, { id: newId(), date: today, source: source || "New payment", amount }],
               }));
             }}
+            onStash={(amount) => {
+              setState((s) => ({ ...s, stashDeposits: [...s.stashDeposits, { id: newId(), date: today, amount }] }));
+              setToast(`Logged ${usd(amount)} in your tax stash`);
+            }}
           />
+
+          {hasIncome && <StashCard stash={stash} />}
 
           <div className="grid grid-cols-2 gap-3">
             <Stat
-              label="Set aside from every payment"
-              value={hasIncome ? pct(plan.setAsideRate, 0) : "—"}
-              sub={hasIncome ? "federal + SE tax" + (state.stateRate ? " + state" : "") : "add income to calculate"}
+              label="Set aside from new payouts"
+              value={hasIncome ? pct(nextRate, 0) : "—"}
+              sub={
+                hasIncome
+                  ? `${pct(plan.setAsideRate, 0)} average for ${YEAR} · federal + SE${state.stateRate ? " + state" : ""}`
+                  : "add income to calculate"
+              }
               tone="brand"
             />
             <Stat
@@ -292,10 +334,18 @@ export function Logo() {
   );
 }
 
-function JustGotPaid({ rate, onAdd }: { rate: number; onAdd: (amount: number, source: string) => void }) {
+function JustGotPaid({
+  quote,
+  onAdd,
+  onStash,
+}: {
+  quote: (amount: number) => { stash: number; yours: number };
+  onAdd: (amount: number, source: string) => void;
+  onStash: (amount: number) => void;
+}) {
   const [amount, setAmount] = useState<number | null>(null);
   const [source, setSource] = useState("");
-  const [last, setLast] = useState<{ stash: number; yours: number; amount: number } | null>(null);
+  const [last, setLast] = useState<{ stash: number; yours: number; amount: number; moved?: boolean } | null>(null);
   return (
     <Card className="border-brand/30 bg-gradient-to-br from-brand-soft to-surface">
       <div className="flex items-center justify-between">
@@ -307,7 +357,7 @@ function JustGotPaid({ rate, onAdd }: { rate: number; onAdd: (amount: number, so
         onSubmit={(e) => {
           e.preventDefault();
           if (!amount || amount <= 0) return;
-          const split = splitPayment(amount, rate);
+          const split = quote(amount);
           onAdd(amount, source);
           setLast({ ...split, amount });
           setAmount(null);
@@ -343,10 +393,81 @@ function JustGotPaid({ rate, onAdd }: { rate: number; onAdd: (amount: number, so
             <div className="text-xs opacity-80">Move to tax savings</div>
             <div className="tnum text-2xl font-bold">{usd(last.stash)}</div>
           </div>
+          <button
+            type="button"
+            disabled={last.moved}
+            onClick={() => {
+              onStash(last.stash);
+              setLast({ ...last, moved: true });
+            }}
+            className="col-span-2 rounded-xl border border-brand/40 bg-surface px-4 py-2.5 text-sm font-semibold text-brand hover:bg-brand-soft disabled:border-transparent disabled:bg-brand-soft"
+          >
+            {last.moved ? `✓ ${usd(last.stash)} logged in your tax stash` : `I moved ${usd(last.stash)} to tax savings`}
+          </button>
           <p className="col-span-2 text-xs text-muted">
-            Based on your projected {YEAR} tax — the rate updates as you add income and deductions.
+            That is {pct(last.stash / last.amount, 0)} of this payout: the exact extra {YEAR} tax it creates (SE tax + your
+            bracket, after deductions). New dollars usually cost more than your yearly average once the standard deduction
+            is used up.
           </p>
         </div>
+      )}
+    </Card>
+  );
+}
+
+function StashCard({ stash }: { stash: StashStatus }) {
+  const behind = stash.status === "behind";
+  return (
+    <Card>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="font-semibold">Your tax stash</h2>
+          <p className="mt-0.5 text-sm text-muted">Is the money in your checking account really yours?</p>
+        </div>
+        <span
+          className={`shrink-0 rounded-full px-3 py-1 text-sm font-semibold ${
+            behind ? "bg-danger-soft text-danger" : "bg-brand-soft text-brand"
+          }`}
+        >
+          {behind ? `Behind ${usd(-stash.gap)}` : "On track ✓"}
+        </span>
+      </div>
+      <div
+        className="mt-4 h-3 overflow-hidden rounded-full bg-surface-2"
+        role="progressbar"
+        aria-label="Share of this year's tax covered"
+        aria-valuenow={Math.round(stash.progress * 100)}
+      >
+        <div
+          className={`h-full rounded-full transition-all duration-500 ${behind ? "bg-warn" : "bg-brand"}`}
+          style={{ width: `${Math.max(2, stash.progress * 100)}%` }}
+        />
+      </div>
+      <div className="tnum mt-2 flex justify-between gap-2 text-sm">
+        <span>
+          <b>{usd(stash.covered)}</b> covered ({Math.round(stash.progress * 100)}%)
+        </span>
+        <span className="text-muted">{usd(stash.targetForYear)} needed for {YEAR}</span>
+      </div>
+      <div className="mt-4 grid grid-cols-3 gap-2 text-center text-xs">
+        <div className="rounded-xl bg-surface-2 p-2">
+          <div className="text-muted">In tax savings</div>
+          <div className="tnum text-base font-semibold">{usd(stash.balance)}</div>
+        </div>
+        <div className="rounded-xl bg-surface-2 p-2">
+          <div className="text-muted">Paid to IRS</div>
+          <div className="tnum text-base font-semibold">{usd(stash.paidToIrs)}</div>
+        </div>
+        <div className="rounded-xl bg-surface-2 p-2">
+          <div className="text-muted">Should be by today</div>
+          <div className="tnum text-base font-semibold">{usd(stash.targetToDate)}</div>
+        </div>
+      </div>
+      {behind && (
+        <p className="mt-3 text-sm text-muted">
+          Move <b className="text-ink">{usd(-stash.gap)}</b> to tax savings to catch up, then stash your % from every new
+          payout. IRS payments are assumed to come out of the stash.
+        </p>
       )}
     </Card>
   );
@@ -366,6 +487,7 @@ function ActionPlan({ plan, today }: { plan: Plan; today: string }) {
     const ics = buildIcs(
       items.map((i) => ({ dueDate: i.dueDate, amount: i.amount })),
       window.location.origin + "/plan",
+      { from: today, until: TAX_2026.estimated.returnDueDate, rate: plan.setAsideRate },
     );
     const url = URL.createObjectURL(new Blob([ics], { type: "text/calendar" }));
     const a = document.createElement("a");
@@ -440,10 +562,10 @@ function ActionPlan({ plan, today }: { plan: Plan; today: string }) {
       <div className="mt-4 flex flex-wrap gap-2">
         <button
           onClick={download}
-          disabled={items.length === 0}
+          title="IRS deadlines with exact amounts + a weekly Friday check-in"
           className="rounded-xl bg-ink px-4 py-2.5 text-sm font-semibold text-bg disabled:opacity-40"
         >
-          📅 Add deadlines to calendar
+          📅 Add deadlines + weekly check-in
         </button>
         <a
           href="https://www.irs.gov/payments/direct-pay"
@@ -672,40 +794,50 @@ function IncomeLog({
   );
 }
 
-function EstimatedLog({
+type LogKey = "estimatedPayments" | "stashDeposits";
+
+function AmountLog({
+  field,
   state,
   setState,
   today,
+  empty,
+  label,
 }: {
+  field: LogKey;
   state: PlanState;
   setState: React.Dispatch<React.SetStateAction<PlanState>>;
   today: string;
+  empty: string;
+  label: string;
 }) {
   const [draft, setDraft] = useState({ date: today, amount: null as number | null });
   useEffect(() => setDraft((d) => ({ ...d, date: today })), [today]);
+  const items = state[field];
   return (
-    <div className="space-y-3">
+    <div className="space-y-2">
+      <div className="text-sm font-medium">{label}</div>
       <form
-        className="grid grid-cols-[1fr_1fr_auto] gap-2"
+        className="grid grid-cols-[1fr_1fr_auto] gap-2 [&>*]:min-w-0"
         onSubmit={(e) => {
           e.preventDefault();
           if (!draft.amount) return;
           setState((s) => ({
             ...s,
-            estimatedPayments: [...s.estimatedPayments, { id: newId(), date: draft.date, amount: draft.amount! }],
+            [field]: [...s[field], { id: newId(), date: draft.date, amount: draft.amount! }],
           }));
           setDraft({ ...draft, amount: null });
         }}
       >
         <input
           type="date"
-          aria-label="Payment date"
+          aria-label={`${label} date`}
           className="rounded-xl border border-line bg-surface-2 px-3 py-2.5 text-sm"
           value={draft.date}
           onChange={(e) => setDraft({ ...draft, date: e.target.value })}
         />
         <input
-          aria-label="Amount paid"
+          aria-label={`${label} amount`}
           inputMode="decimal"
           placeholder="$ amount"
           className="tnum rounded-xl border border-line bg-surface-2 px-3 py-2.5 text-sm"
@@ -717,22 +849,20 @@ function EstimatedLog({
         />
         <button className="rounded-xl bg-ink px-4 py-2.5 text-sm font-semibold text-bg">Add</button>
       </form>
-      {state.estimatedPayments.length === 0 ? (
-        <p className="text-sm text-muted">No payments yet — that&apos;s common in year one.</p>
+      {items.length === 0 ? (
+        <p className="text-sm text-muted">{empty}</p>
       ) : (
         <ul className="divide-y divide-line rounded-xl border border-line">
-          {[...state.estimatedPayments]
+          {[...items]
             .sort((a, b) => a.date.localeCompare(b.date))
             .map((p) => (
               <li key={p.id} className="flex items-center gap-3 px-3 py-2 text-sm">
                 <span className="flex-1">{formatShort(p.date)}</span>
                 <span className="tnum font-medium">{usd(p.amount)}</span>
                 <button
-                  aria-label="Remove payment"
+                  aria-label="Remove"
                   className="text-muted hover:text-danger"
-                  onClick={() =>
-                    setState((s) => ({ ...s, estimatedPayments: s.estimatedPayments.filter((x) => x.id !== p.id) }))
-                  }
+                  onClick={() => setState((s) => ({ ...s, [field]: s[field].filter((x) => x.id !== p.id) }))}
                 >
                   ✕
                 </button>

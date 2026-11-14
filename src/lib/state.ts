@@ -1,7 +1,11 @@
 import type { TaxInput } from "./tax/engine";
+import type { StashDeposit } from "./stash";
 
 /** Everything the user enters, minus "today" (which is always computed live). */
-export type PlanState = Omit<TaxInput, "asOf">;
+export type PlanState = Omit<TaxInput, "asOf"> & {
+  /** Transfers the user made into a separate tax savings account. */
+  stashDeposits: StashDeposit[];
+};
 
 export const EMPTY_STATE: PlanState = {
   filingStatus: "single",
@@ -16,6 +20,7 @@ export const EMPTY_STATE: PlanState = {
   priorYearTax: null,
   priorYearAgiOver150k: false,
   estimatedPayments: [],
+  stashDeposits: [],
 };
 
 /** Demo persona: Maya, 31, Austin TX — freelance UX designer who also delivers for DoorDash. */
@@ -44,6 +49,11 @@ export const MAYA_STATE: PlanState = {
   stateRate: 0,
   priorYearTax: 6200,
   estimatedPayments: [{ id: "e1", date: "2026-04-14", amount: 2000 }],
+  stashDeposits: [
+    { id: "s1", date: "2026-01-10", amount: 800 },
+    { id: "s2", date: "2026-02-21", amount: 1000 },
+    { id: "s3", date: "2026-05-16", amount: 1200 },
+  ],
 };
 
 const STORAGE_KEY = "stash1099:v1";
@@ -111,5 +121,8 @@ export function sanitize(raw: unknown): PlanState | null {
     estimatedPayments: list(r.estimatedPayments)
       .filter((p) => p && isDate(p.date) && num(p.amount) > 0)
       .map((p, i) => ({ id: str(p.id, `e${i}`), date: p.date, amount: num(p.amount) })),
+    stashDeposits: list(r.stashDeposits)
+      .filter((p) => p && isDate(p.date) && num(p.amount) > 0)
+      .map((p, i) => ({ id: str(p.id, `s${i}`), date: p.date, amount: num(p.amount) })),
   };
 }
