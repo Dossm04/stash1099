@@ -13,6 +13,8 @@ export interface EstimatedPayment {
   id: string;
   date: string;
   amount: number;
+  /** True when the payment was made from checking rather than from the tax savings account. */
+  fromChecking?: boolean;
 }
 
 export interface TaxInput {
@@ -34,6 +36,8 @@ export interface TaxInput {
   /** Total tax from last year's Form 1040 (line 24). null = unknown. */
   priorYearTax: number | null;
   priorYearAgiOver150k: boolean;
+  /** Qualifying children under 17 (Child Tax Credit). */
+  kidsUnder17?: number;
   /** Federal estimated payments already sent this tax year. */
   estimatedPayments: EstimatedPayment[];
   /** "Today" — injected so the engine is pure and testable. */
@@ -54,6 +58,7 @@ export interface TaxBreakdown {
   qbiLimited: boolean;
   taxableIncome: number;
   incomeTax: number;
+  childTaxCredit: number;
   marginalRate: number;
   federalTotal: number;
   stateTax: number;
@@ -146,7 +151,10 @@ export function computeTax(input: TaxInput, cfg: TaxYearConfig = TAX_2026): TaxB
   // Self-employment tax (Schedule SE)
   let seBase = netProfit * cfg.se.netEarningsFactor;
   if (seBase < cfg.se.minimumNetEarnings) seBase = 0;
-  const ssRoom = Math.max(0, cfg.se.socialSecurityWageBase - input.w2Wages);
+  // The Social Security cap is per person. On a joint return the W-2 wages may be the spouse's,
+  // so we do not let them shrink the freelancer's own cap (this errs toward a higher estimate).
+  const ownWages = fs === "mfj" ? 0 : input.w2Wages;
+  const ssRoom = Math.max(0, cfg.se.socialSecurityWageBase - ownWages);
   const seTax = Math.min(seBase, ssRoom) * cfg.se.socialSecurityRate + seBase * cfg.se.medicareRate;
   const additionalMedicare =
     Math.max(0, seBase + input.w2Wages - cfg.additionalMedicare.threshold[fs]) * cfg.additionalMedicare.rate;
@@ -157,7 +165,7 @@ export function computeTax(input: TaxInput, cfg: TaxYearConfig = TAX_2026): TaxB
   // No tax on tips (2025–2028): capped, limited to net profit, phased out by MAGI.
   const tipsRaw = Math.min(input.qualifiedTips, cfg.tips.cap, netProfit);
   const over = Math.max(0, agi - cfg.tips.phaseOutStart[fs]);
-  const tipsDeduction = Math.max(0, tipsRaw - Math.ceil(over / 1000) * cfg.tips.phaseOutPer1000);
+  const tipsDeduction = Math.max(0, tipsRaw - Math.floor(over / 1000) * cfg.tips.phaseOutPer1000);
 
   const taxableBeforeQbi = Math.max(0, agi - standardDeduction - tipsDeduction);
 
@@ -174,7 +182,23 @@ export function computeTax(input: TaxInput, cfg: TaxYearConfig = TAX_2026): TaxB
 
   const taxableIncome = Math.max(0, taxableBeforeQbi - qbiDeduction);
   const { tax: incomeTax, marginal } = bracketTax(taxableIncome, cfg.brackets[fs]);
-  const federalTotal = incomeTax + seTax + additionalMedicare;
+  // Child Tax Credit: offsets income tax first; the refundable part (15% of earned income above
+  // $2,500, capped per child) can also offset self-employment tax.
+  const kids = Math.max(0, Math.floor(input.kidsUnder17 ?? 0));
+  const ctc = cfg.childTaxCredit;
+  const ctcAfterPhaseOut = Math.max(
+    0,
+    kids * ctc.perChild - Math.ceil(Math.max(0, agi - ctc.phaseOutStart[fs]) / 1000) * ctc.phaseOutPer1000,
+  );
+  const ctcAgainstIncomeTax = Math.min(ctcAfterPhaseOut, incomeTax);
+  const earnedIncome = Math.max(0, input.w2Wages + netProfit - seTax / 2);
+  const ctcRefundable = Math.min(
+    ctcAfterPhaseOut - ctcAgainstIncomeTax,
+    kids * ctc.refundablePerChild,
+    Math.max(0, earnedIncome - ctc.earnedIncomeFloor) * ctc.refundableRate,
+  );
+  const childTaxCredit = ctcAgainstIncomeTax + ctcRefundable;
+  const federalTotal = Math.max(0, incomeTax + seTax + additionalMedicare - childTaxCredit);
   const stateTax = agi * input.stateRate;
 
   return {
@@ -191,6 +215,7 @@ export function computeTax(input: TaxInput, cfg: TaxYearConfig = TAX_2026): TaxB
     qbiLimited,
     taxableIncome: round2(taxableIncome),
     incomeTax: round2(incomeTax),
+    childTaxCredit: round2(childTaxCredit),
     marginalRate: marginal,
     federalTotal: round2(federalTotal),
     stateTax: round2(stateTax),

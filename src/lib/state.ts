@@ -7,6 +7,8 @@ export type PlanState = Omit<TaxInput, "asOf"> & {
   stashDeposits: StashDeposit[];
   /** What is in the checking account right now (optional, never leaves the browser). */
   checkingBalance: number | null;
+  /** Rent and bills that must be paid before the next payout (optional; makes safe-to-spend stricter). */
+  billsDue: number;
 };
 
 export const EMPTY_STATE: PlanState = {
@@ -21,9 +23,11 @@ export const EMPTY_STATE: PlanState = {
   stateRate: 0,
   priorYearTax: null,
   priorYearAgiOver150k: false,
+  kidsUnder17: 0,
   estimatedPayments: [],
   stashDeposits: [],
   checkingBalance: null,
+  billsDue: 0,
 };
 
 /** Demo persona: Maya, 31, Austin TX — freelance UX designer who also delivers for DoorDash. */
@@ -54,8 +58,8 @@ export const MAYA_STATE: PlanState = {
   estimatedPayments: [{ id: "e1", date: "2026-04-14", amount: 2000 }],
   stashDeposits: [
     { id: "s1", date: "2026-01-10", amount: 800 },
-    { id: "s2", date: "2026-02-21", amount: 1000 },
-    { id: "s3", date: "2026-05-16", amount: 1200 },
+    { id: "s2", date: "2026-02-21", amount: 1200 },
+    { id: "s3", date: "2026-05-16", amount: 1000 },
   ],
   checkingBalance: 4200,
 };
@@ -127,9 +131,16 @@ export function sanitize(raw: unknown): PlanState | null {
     stateRate: Math.min(0.15, num(r.stateRate)),
     priorYearTax: r.priorYearTax == null ? null : num(r.priorYearTax),
     priorYearAgiOver150k: r.priorYearAgiOver150k === true,
+    kidsUnder17: Math.min(10, Math.floor(num(r.kidsUnder17))),
+    billsDue: num(r.billsDue),
     estimatedPayments: list(r.estimatedPayments)
       .filter((p) => p && isDate(p.date) && num(p.amount) > 0)
-      .map((p, i) => ({ id: str(p.id, `e${i}`), date: p.date, amount: num(p.amount) })),
+      .map((p, i) => ({
+        id: str(p.id, `e${i}`),
+        date: p.date,
+        amount: num(p.amount),
+        ...(p.fromChecking === true ? { fromChecking: true } : {}),
+      })),
     checkingBalance: r.checkingBalance == null ? null : num(r.checkingBalance),
     stashDeposits: list(r.stashDeposits)
       .filter((p) => p && isDate(p.date) && num(p.amount) > 0)

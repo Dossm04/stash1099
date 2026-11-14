@@ -8,11 +8,18 @@ import { quotePayout } from "@/lib/quote";
 import { formatShort, todayLocal } from "@/lib/tax/dates";
 import { newId, parsePayments } from "@/lib/parsePayments";
 import { buildIcs } from "@/lib/ics";
-import { safeToSpend, stashStatus, type StashStatus } from "@/lib/stash";
+import { catchUpPlan } from "@/lib/stash";
+import { buildTaxProCsv } from "@/lib/exportCsv";
+import { loadCheckins, saveCheckins } from "@/lib/pro";
+import type { PayStub } from "@/lib/quote";
+import { snapshot, type Snapshot } from "@/lib/snapshot";
 import { importBankCsv, type Deposit, type ImportResult } from "@/lib/importCsv";
 import type { IncomePayment } from "@/lib/tax/engine";
 import { EMPTY_STATE, MAYA_STATE, decodeShare, encodeShare, loadLocal, saveLocal, type PlanState } from "@/lib/state";
 import { Card, MoneyField, Segmented, Stat, Step, pct, usd } from "./ui";
+import { PayStubView } from "./PayStub";
+import { ProTag, useGate } from "./ProGate";
+import { ThisWeek } from "./ThisWeek";
 
 const YEAR = TAX_2026.year;
 
@@ -21,10 +28,12 @@ export default function PlanApp() {
   const [ready, setReady] = useState(false);
   const [today, setToday] = useState("2026-11-14");
   const [toast, setToast] = useState<string | null>(null);
+  const [checkins, setCheckins] = useState<string[]>([]);
 
   // Load: shared link > ?demo=maya > local storage.
   useEffect(() => {
     setToday(todayLocal());
+    setCheckins(loadCheckins());
     const url = new URL(window.location.href);
     const shared = url.hash.startsWith("#s=") ? decodeShare(url.hash.slice(3)) : null;
     const demo = url.searchParams.get("demo") === "maya";
@@ -47,19 +56,10 @@ export default function PlanApp() {
     return () => clearTimeout(t);
   }, [toast]);
 
-  const plan = useMemo(() => buildPlan({ ...state, asOf: today }), [state, today]);
-  const stash = useMemo(
-    () => stashStatus(state.payments, state.stashDeposits, state.estimatedPayments, plan, today),
-    [state, plan, today],
-  );
+  // One derived snapshot for the whole screen: plan, stash, safe-to-spend, score, next-payout rate.
+  const snap = useMemo(() => snapshot(state, today), [state, today]);
+  const { plan, nextRate, hasIncome } = snap;
   const set = <K extends keyof PlanState>(k: K, v: PlanState[K]) => setState((s) => ({ ...s, [k]: v }));
-
-  const hasIncome = state.payments.length > 0 || (state.expectedRestOfYear ?? 0) > 0;
-  // Marginal set-aside rate for the next payout (what each new dollar really costs in tax).
-  const nextRate = useMemo(
-    () => (hasIncome ? quotePayout(state, 1000, today).stash / 1000 : 0),
-    [state, today, hasIncome],
-  );
 
   return (
     <div className="min-h-screen">
@@ -231,6 +231,7 @@ export default function PlanApp() {
               />
               <AmountLog
                 field="estimatedPayments"
+                checkingFlag
                 label="Paid to the IRS for 2026"
                 empty="No payments yet. That is common in year one."
                 state={state}
@@ -245,43 +246,52 @@ export default function PlanApp() {
         <div
           className={`min-w-0 space-y-4 lg:sticky lg:top-4 lg:self-start ${hasIncome ? "order-first lg:order-none" : ""}`}
         >
-          {hasIncome && (
-            <SafeCard
-              balance={state.checkingBalance}
-              onBalance={(v) => set("checkingBalance", v)}
-              stash={stash}
-              plan={plan}
-              w2Withholding={state.w2Withholding}
-            />
-          )}
-
-          <JustGotPaid
-            quote={(amount) => quotePayout(state, amount, today)}
-            onAdd={(amount, source) => {
-              setState((s) => ({
-                ...s,
-                payments: [...s.payments, { id: newId(), date: today, source: source || "New payment", amount }],
-              }));
-            }}
-            onStash={(amount) => {
-              setState((s) => ({ ...s, stashDeposits: [...s.stashDeposits, { id: newId(), date: today, amount }] }));
-              setToast(`Logged ${usd(amount)} in your tax stash`);
-            }}
-          />
-
-          {hasIncome && <StashCard stash={stash} />}
-
           {hasIncome ? (
             <>
+              <SafeCard
+                snap={snap}
+                balance={state.checkingBalance}
+                billsDue={state.billsDue}
+                onBalance={(v) => set("checkingBalance", v)}
+                onBills={(v) => set("billsDue", v ?? 0)}
+              />
+
+              <JustGotPaid
+                quote={(amount) => quotePayout(state, amount, today)}
+                onAdd={(amount, source) =>
+                  setState((s) => ({
+                    ...s,
+                    payments: [...s.payments, { id: newId(), date: today, source: source || "New payment", amount }],
+                  }))
+                }
+                onStash={(amount) => {
+                  setState((s) => ({
+                    ...s,
+                    stashDeposits: [...s.stashDeposits, { id: newId(), date: today, amount }],
+                  }));
+                  setToast(`Logged ${usd(amount)} in your tax savings`);
+                }}
+              />
+
+              <ThisWeek
+                snap={snap}
+                today={today}
+                checkins={checkins}
+                onCheckin={() => {
+                  const next = [...checkins, today];
+                  setCheckins(next);
+                  saveCheckins(next);
+                  setToast("Payday check-in done. See you next Friday.");
+                }}
+              />
+
+              <StashCard snap={snap} payments={state.payments} />
+
               <div className="grid grid-cols-2 gap-3">
                 <Stat
-                  label="Set aside from new payouts"
-                  value={hasIncome ? pct(nextRate, 0) : "—"}
-                  sub={
-                    hasIncome
-                      ? `${pct(plan.setAsideRate, 0)} average for ${YEAR} · federal + SE${state.stateRate ? " + state" : ""}`
-                      : "add income to calculate"
-                  }
+                  label="Withhold from new payouts"
+                  value={pct(nextRate, 0)}
+                  sub={`${pct(plan.setAsideRate, 0)} average for ${YEAR} · federal + SE${state.stateRate ? " + state" : ""}`}
                   tone="brand"
                 />
                 <Stat
@@ -310,22 +320,25 @@ export default function PlanApp() {
               <ActionPlan plan={plan} today={today} nextRate={nextRate} />
               <Schedule plan={plan} />
               <Breakdown plan={plan} />
+              <ExportCard state={state} snap={snap} today={today} />
             </>
           ) : (
             <Card className="text-center">
-              <div className="text-4xl">🧾</div>
-              <h2 className="mt-2 font-semibold">Your plan shows up here</h2>
+              <h2 className="font-semibold">Your plan shows up here</h2>
               <p className="mt-1 text-sm text-muted">
-                Safe-to-spend, the IRS minimum for each deadline, your penalty so far and a calendar with exact amounts.
+                Safe to spend, a pay stub for every payout, the IRS minimum for each deadline and your tax-ready score.
               </p>
+              <Link href="/start" className="mt-3 inline-block text-sm font-semibold text-brand underline">
+                Prefer questions one at a time? Take the 60-second check
+              </Link>
             </Card>
           )}
 
           <p className="px-1 text-xs leading-relaxed text-muted">
             Estimates for tax year {YEAR} using IRS Rev. Proc. 2025-32, the{" "}
-            {TAX_2026.se.socialSecurityWageBase.toLocaleString("en-US")} Social Security wage base, Form 2210 regular-method
-            penalty math and IRS quarterly interest rates. Not tax advice. Everything is computed in your browser;
-            nothing is sent to a server.
+            {TAX_2026.se.socialSecurityWageBase.toLocaleString("en-US")} Social Security wage base, Form 2210
+            regular-method penalty math and IRS quarterly interest rates. Not tax advice. Everything is computed in your
+            browser; nothing is sent to a server.
           </p>
         </div>
       </main>
@@ -342,28 +355,34 @@ export default function PlanApp() {
 /* ================================================================== */
 
 function Header({ onDemo, onReset, onShare }: { onDemo: () => void; onReset: () => void; onShare: () => void }) {
+  const gate = useGate();
   return (
     <header className="border-b border-line bg-surface/80 backdrop-blur">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-4 py-3">
         <Link href="/" className="flex items-center gap-2 font-semibold">
           <Logo /> Stash1099
         </Link>
-        <div className="flex flex-wrap justify-end gap-1 text-xs sm:gap-2 sm:text-sm">
+        <div className="flex flex-wrap items-center justify-end gap-1 text-xs sm:gap-2 sm:text-sm">
           <button onClick={onDemo} className="rounded-lg px-3 py-1.5 font-medium text-brand hover:bg-brand-soft">
             Maya&apos;s example
           </button>
           <button onClick={onReset} className="rounded-lg px-3 py-1.5 text-muted hover:bg-surface-2">
             Reset
           </button>
-          <button onClick={onShare} className="rounded-lg bg-ink px-3 py-1.5 font-medium text-bg hover:opacity-90">
+          <button onClick={onShare} className="rounded-lg px-3 py-1.5 font-medium hover:bg-surface-2">
             Share link
+          </button>
+          <button
+            onClick={() => gate.open()}
+            className={`rounded-lg px-3 py-1.5 font-semibold ${gate.pro ? "bg-brand-soft text-brand" : "bg-ink text-bg"}`}
+          >
+            {gate.pro ? "Pro (demo) ✓" : "Upgrade"}
           </button>
         </div>
       </div>
     </header>
   );
 }
-
 export function Logo() {
   return (
     <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand text-sm font-bold text-brand-ink">
@@ -377,27 +396,27 @@ function JustGotPaid({
   onAdd,
   onStash,
 }: {
-  quote: (amount: number) => { stash: number; yours: number };
+  quote: (amount: number) => PayStub;
   onAdd: (amount: number, source: string) => void;
   onStash: (amount: number) => void;
 }) {
   const [amount, setAmount] = useState<number | null>(null);
   const [source, setSource] = useState("");
-  const [last, setLast] = useState<{ stash: number; yours: number; amount: number; moved?: boolean } | null>(null);
+  const [last, setLast] = useState<(PayStub & { moved?: boolean }) | null>(null);
   return (
     <Card className="border-brand/30 bg-gradient-to-br from-brand-soft to-surface">
       <div className="flex items-center justify-between">
-        <h2 className="font-semibold">💸 I just got paid</h2>
-        <span className="text-xs text-muted">adds to your income log</span>
+        <h2 className="font-semibold">I just got paid</h2>
+        <span className="text-xs text-muted">runs payroll on the payout</span>
       </div>
       <form
         className="mt-3 flex flex-col gap-2 sm:flex-row"
         onSubmit={(e) => {
           e.preventDefault();
           if (!amount || amount <= 0) return;
-          const split = quote(amount);
+          const stub = quote(amount);
           onAdd(amount, source);
-          setLast({ ...split, amount });
+          setLast(stub);
           setAmount(null);
           setSource("");
         }}
@@ -422,14 +441,17 @@ function JustGotPaid({
         </button>
       </form>
       {last && (
-        <div key={last.amount + last.stash} className="animate-pop mt-4 grid grid-cols-2 gap-2 text-center">
-          <div className="rounded-xl bg-surface p-3">
-            <div className="text-xs text-muted">Yours to spend</div>
-            <div className="tnum text-2xl font-bold">{usd(last.yours)}</div>
-          </div>
-          <div className="rounded-xl bg-brand p-3 text-brand-ink">
-            <div className="text-xs opacity-80">Move to tax savings</div>
-            <div className="tnum text-2xl font-bold">{usd(last.stash)}</div>
+        <div key={`${last.gross}-${last.stash}`} className="animate-pop mt-4 space-y-2">
+          <PayStubView stub={last} />
+          <div className="grid grid-cols-2 gap-2 text-center">
+            <div className="rounded-xl bg-surface p-3">
+              <div className="text-xs text-muted">Yours to spend</div>
+              <div className="tnum text-2xl font-bold">{usd(last.yours)}</div>
+            </div>
+            <div className="rounded-xl bg-brand p-3 text-brand-ink">
+              <div className="text-xs opacity-80">Move to tax savings</div>
+              <div className="tnum text-2xl font-bold">{usd(last.stash)}</div>
+            </div>
           </div>
           <button
             type="button"
@@ -438,14 +460,15 @@ function JustGotPaid({
               onStash(last.stash);
               setLast({ ...last, moved: true });
             }}
-            className="col-span-2 rounded-xl border border-brand/40 bg-surface px-4 py-2.5 text-sm font-semibold text-brand hover:bg-brand-soft disabled:border-transparent disabled:bg-brand-soft"
+            className="w-full rounded-xl border border-brand/40 bg-surface px-4 py-2.5 text-sm font-semibold text-brand hover:bg-brand-soft disabled:border-transparent disabled:bg-brand-soft"
           >
-            {last.moved ? `✓ ${usd(last.stash)} logged in your tax stash` : `I moved ${usd(last.stash)} to tax savings`}
+            {last.moved
+              ? `✓ ${usd(last.stash)} logged in your tax savings`
+              : `I moved ${usd(last.stash)} to tax savings`}
           </button>
-          <p className="col-span-2 text-xs text-muted">
-            That is {pct(last.stash / last.amount, 0)} of this payout: the exact extra {YEAR} tax it creates (SE tax +
-            your bracket, after deductions). New dollars usually cost more than your yearly average once the standard
-            deduction is used up.
+          <p className="text-xs text-muted">
+            Estimated extra {YEAR} tax this payout adds. New dollars usually cost more than your yearly average once the
+            standard deduction is used up.
           </p>
         </div>
       )}
@@ -454,55 +477,62 @@ function JustGotPaid({
 }
 
 function SafeCard({
+  snap,
   balance,
+  billsDue,
   onBalance,
-  stash,
-  plan,
-  w2Withholding,
+  onBills,
 }: {
+  snap: Snapshot;
   balance: number | null;
+  billsDue: number;
   onBalance: (v: number | null) => void;
-  stash: StashStatus;
-  plan: Plan;
-  w2Withholding: number;
+  onBills: (v: number | null) => void;
 }) {
-  const s = safeToSpend(balance ?? 0, stash, plan, w2Withholding);
-  const negative = balance != null && s.safe < 0;
+  const { safe, stash } = snap;
+  const negative = balance != null && safe.safe < 0;
   return (
     <Card className="border-ink/10">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Safe to spend</h2>
           {balance == null ? (
-            <p className="mt-1 text-sm text-muted">
+            <p className="mt-1 max-w-xs text-sm text-muted">
               Type what is in your checking account. We show how much of it is yours.
             </p>
           ) : (
             <div className={`tnum mt-1 text-4xl font-bold ${negative ? "text-danger" : "text-brand"}`}>
-              {usd(s.safe)}
+              {usd(safe.safe)}
             </div>
           )}
         </div>
-        <div className="w-44">
+        <div className="grid w-full grid-cols-2 gap-2 sm:w-80">
           <MoneyField label="Checking balance now" value={balance} nullable onChange={onBalance} placeholder="4,200" />
+          <MoneyField label="Bills before next payout" value={billsDue} onChange={onBills} placeholder="0" />
         </div>
       </div>
       {balance != null && (
         <p className="mt-2 text-sm">
-          {negative ? (
+          {negative && billsDue === 0 ? (
             <>
-              You have already spent <b className="text-danger">{usd(-s.safe)}</b> of the IRS&apos;s money.{" "}
+              You have already spent <b className="text-danger">{usd(-safe.safe)}</b> of the IRS&apos;s money.{" "}
+            </>
+          ) : null}
+          {negative && billsDue > 0 ? (
+            <>
+              You are <b className="text-danger">{usd(-safe.safe)}</b> short after tax and bills.{" "}
             </>
           ) : null}
           <span className="text-muted">
-            {usd(s.unstashedTax)} of your balance is tax on money you earned this year and have not set aside.
+            {usd(safe.unstashedTax)} of your balance is tax on money you earned this year and have not set aside
+            {billsDue > 0 ? `; ${usd(billsDue)} is held back for bills` : ""}.
           </span>
         </p>
       )}
       <div className="mt-4 grid grid-cols-3 gap-2 rounded-xl bg-surface-2 p-3 text-center text-xs">
         <div>
           <div className="text-muted">Still owed for {YEAR}</div>
-          <div className="tnum text-base font-semibold">{usd(s.stillOwedForYear)}</div>
+          <div className="tnum text-base font-semibold">{usd(safe.stillOwedForYear)}</div>
         </div>
         <div>
           <div className="text-muted">In tax savings</div>
@@ -510,8 +540,8 @@ function SafeCard({
         </div>
         <div>
           <div className="text-muted">April 15 shortfall</div>
-          <div className={`tnum text-base font-semibold ${s.aprilShortfall > 0 ? "text-danger" : "text-brand"}`}>
-            {usd(s.aprilShortfall)}
+          <div className={`tnum text-base font-semibold ${safe.aprilShortfall > 0 ? "text-danger" : "text-brand"}`}>
+            {usd(safe.aprilShortfall)}
           </div>
         </div>
       </div>
@@ -519,14 +549,20 @@ function SafeCard({
   );
 }
 
-function StashCard({ stash }: { stash: StashStatus }) {
+function StashCard({ snap, payments }: { snap: Snapshot; payments: IncomePayment[] }) {
+  const gate = useGate();
+  const [spread, setSpread] = useState("8");
+  const { stash, nextRate } = snap;
   const behind = stash.status === "behind";
+  const plan = catchUpPlan(stash.gap, payments, nextRate, Number(spread));
   return (
     <Card>
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h2 className="font-semibold">Your tax stash</h2>
-          <p className="mt-0.5 text-sm text-muted">Is the money in your checking account really yours?</p>
+          <h2 className="font-semibold">Your tax savings</h2>
+          <p className="mt-0.5 text-sm text-muted">
+            Tax on what you have earned so far, and how much of it is covered.
+          </p>
         </div>
         <span
           className={`shrink-0 rounded-full px-3 py-1 text-sm font-semibold ${
@@ -570,18 +606,85 @@ function StashCard({ stash }: { stash: StashStatus }) {
         </div>
       </div>
       {behind && (
-        <p className="mt-3 text-sm text-muted">
-          Move <b className="text-ink">{usd(-stash.gap)}</b> to tax savings to catch up, then stash your % from every
-          new payout. IRS payments are assumed to come out of the stash.
-        </p>
+        <div className="mt-4 rounded-xl border border-line p-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h3 className="flex items-center gap-2 text-sm font-semibold">
+              Catch-up plan <ProTag />
+            </h3>
+            {gate.pro && (
+              <div className="w-56">
+                <Segmented
+                  value={spread}
+                  onChange={setSpread}
+                  options={[
+                    { value: "4", label: "4 payouts" },
+                    { value: "8", label: "8" },
+                    { value: "12", label: "12" },
+                  ]}
+                />
+              </div>
+            )}
+          </div>
+          {gate.pro ? (
+            <p className="mt-2 text-sm">
+              Hold back <b>{pct(plan.rate, 0)}</b> of your next {plan.payouts} payouts instead of{" "}
+              {pct(plan.baseRate, 0)}: about <b>{usd(plan.extraPerPayout)}</b> extra each, and you are caught up without
+              one {usd(plan.behind)} transfer.
+              {!plan.feasible && " That is most of every payout: spread it over more of them."}
+            </p>
+          ) : (
+            <>
+              <p className="mt-2 text-sm text-muted">
+                Move {usd(plan.behind)} today, or spread it over your next payouts so it never hurts.
+              </p>
+              <button
+                onClick={() => gate.open("Catch-up plan")}
+                className="mt-2 rounded-lg bg-ink px-3 py-2 text-sm font-semibold text-bg"
+              >
+                Unlock the catch-up plan
+              </button>
+            </>
+          )}
+        </div>
       )}
     </Card>
   );
 }
 
+function ExportCard({ state, snap, today }: { state: PlanState; snap: Snapshot; today: string }) {
+  const gate = useGate();
+  const download = () => {
+    if (!gate.allow("Tax-pro export")) return;
+    const url = URL.createObjectURL(new Blob([buildTaxProCsv(state, snap, today)], { type: "text/csv" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `stash1099-${YEAR}-summary.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+  return (
+    <Card>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="flex items-center gap-2 font-semibold">
+            For your tax pro <ProTag />
+          </h2>
+          <p className="mt-0.5 text-sm text-muted">Income log, deductions and estimates in one file.</p>
+        </div>
+        <button
+          onClick={download}
+          className="rounded-xl border border-line px-4 py-2.5 text-sm font-semibold hover:bg-surface-2"
+        >
+          Download summary (CSV)
+        </button>
+      </div>
+    </Card>
+  );
+}
 type Plan = ReturnType<typeof buildPlan>;
 
 function ActionPlan({ plan, today, nextRate }: { plan: Plan; today: string; nextRate: number }) {
+  const gate = useGate();
   const [mode, setMode] = useState<"safe" | "exact">("safe");
   const upcoming = mode === "safe" ? plan.upcomingSafe : plan.upcomingExact;
   const items = [
@@ -590,6 +693,7 @@ function ActionPlan({ plan, today, nextRate }: { plan: Plan; today: string; next
   ].filter((i) => i.amount > 0);
 
   const download = () => {
+    if (!gate.allow("Deadline autopilot")) return;
     const ics = buildIcs(
       items.map((i) => ({ dueDate: i.dueDate, amount: i.amount })),
       window.location.origin + "/plan",
@@ -673,7 +777,7 @@ function ActionPlan({ plan, today, nextRate }: { plan: Plan; today: string; next
           title="IRS deadlines with exact amounts + a weekly Friday check-in"
           className="rounded-xl bg-ink px-4 py-2.5 text-sm font-semibold text-bg disabled:opacity-40"
         >
-          📅 Add deadlines + weekly check-in
+          Add deadlines + weekly check-in <ProTag />
         </button>
         <a
           href="https://www.irs.gov/payments/direct-pay"
@@ -933,6 +1037,7 @@ function AmountLog({
   today,
   empty,
   label,
+  checkingFlag = false,
 }: {
   field: LogKey;
   state: PlanState;
@@ -940,10 +1045,12 @@ function AmountLog({
   today: string;
   empty: string;
   label: string;
+  /** Show the "paid from checking" option (IRS payments only). */
+  checkingFlag?: boolean;
 }) {
-  const [draft, setDraft] = useState({ date: today, amount: null as number | null });
+  const [draft, setDraft] = useState({ date: today, amount: null as number | null, fromChecking: false });
   useEffect(() => setDraft((d) => ({ ...d, date: today })), [today]);
-  const items = state[field];
+  const items: { id: string; date: string; amount: number; fromChecking?: boolean }[] = state[field];
   return (
     <div className="space-y-2">
       <div className="text-sm font-medium">{label}</div>
@@ -952,10 +1059,13 @@ function AmountLog({
         onSubmit={(e) => {
           e.preventDefault();
           if (!draft.amount) return;
-          setState((s) => ({
-            ...s,
-            [field]: [...s[field], { id: newId(), date: draft.date, amount: draft.amount! }],
-          }));
+          const entry = {
+            id: newId(),
+            date: draft.date,
+            amount: draft.amount,
+            ...(checkingFlag && draft.fromChecking ? { fromChecking: true } : {}),
+          };
+          setState((s) => ({ ...s, [field]: [...s[field], entry] }));
           setDraft({ ...draft, amount: null });
         }}
       >
@@ -979,6 +1089,17 @@ function AmountLog({
         />
         <button className="rounded-xl bg-ink px-4 py-2.5 text-sm font-semibold text-bg">Add</button>
       </form>
+      {checkingFlag && (
+        <label className="flex items-center gap-2 text-xs text-muted">
+          <input
+            type="checkbox"
+            className="h-4 w-4 accent-[var(--brand)]"
+            checked={draft.fromChecking}
+            onChange={(e) => setDraft({ ...draft, fromChecking: e.target.checked })}
+          />
+          I paid this from checking, not from my tax savings
+        </label>
+      )}
       {items.length === 0 ? (
         <p className="text-sm text-muted">{empty}</p>
       ) : (
@@ -987,7 +1108,10 @@ function AmountLog({
             .sort((a, b) => a.date.localeCompare(b.date))
             .map((p) => (
               <li key={p.id} className="flex items-center gap-3 px-3 py-2 text-sm">
-                <span className="flex-1">{formatShort(p.date)}</span>
+                <span className="flex-1">
+                  {formatShort(p.date)}
+                  {p.fromChecking && <span className="ml-2 text-xs text-muted">from checking</span>}
+                </span>
                 <span className="tnum font-medium">{usd(p.amount)}</span>
                 <button
                   aria-label="Remove"
@@ -1003,10 +1127,10 @@ function AmountLog({
     </div>
   );
 }
-
 /* --------------------------- Bank CSV import --------------------------- */
 
 function BankImport({ existing, onImport }: { existing: IncomePayment[]; onImport: (rows: Deposit[]) => void }) {
+  const gate = useGate();
   const [result, setResult] = useState<ImportResult | null>(null);
   const [rows, setRows] = useState<Deposit[]>([]);
   const [done, setDone] = useState<string | null>(null);
@@ -1092,12 +1216,15 @@ function BankImport({ existing, onImport }: { existing: IncomePayment[]; onImpor
               disabled={picked.length === 0}
               className="rounded-lg bg-ink px-3 py-2 text-sm font-semibold text-bg disabled:opacity-40"
               onClick={() => {
+                // Free users see what the import finds; adding it to the plan is a Pro feature.
+                if (!gate.allow("Bank import")) return;
                 onImport(picked);
                 setDone(`Added ${picked.length} payouts (${usd(total)}) to your income log.`);
               }}
             >
               Add {picked.length} payouts · {usd(total)}
             </button>
+            {!gate.pro && <ProTag />}
             <button type="button" className="text-sm text-muted" onClick={() => setResult(null)}>
               Cancel
             </button>

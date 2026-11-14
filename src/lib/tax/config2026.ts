@@ -36,6 +36,15 @@ export interface TaxYearConfig {
   additionalMedicare: { rate: number; threshold: Record<FilingStatus, number> };
   qbi: { rate: number; threshold: Record<FilingStatus, number> };
   tips: { cap: number; phaseOutStart: Record<FilingStatus, number>; phaseOutPer1000: number };
+  childTaxCredit: {
+    perChild: number;
+    /** Refundable part (Additional Child Tax Credit) per child. */
+    refundablePerChild: number;
+    refundableRate: number;
+    earnedIncomeFloor: number;
+    phaseOutStart: Record<FilingStatus, number>;
+    phaseOutPer1000: number;
+  };
   mileage: { periods: { from: string; to: string; centsPerMile: number }[] };
   estimated: {
     /** Due dates of the four installments for this tax year (ISO dates). */
@@ -97,6 +106,15 @@ export const TAX_2026: TaxYearConfig = {
   additionalMedicare: { rate: 0.009, threshold: { single: 200_000, mfj: 250_000, hoh: 200_000 } },
   qbi: { rate: 0.2, threshold: { single: 201_750, mfj: 403_500, hoh: 201_750 } },
   tips: { cap: 25_000, phaseOutStart: { single: 150_000, mfj: 300_000, hoh: 150_000 }, phaseOutPer1000: 100 },
+  // Child Tax Credit after the 2025 budget law: $2,200 per child under 17, up to $1,700 of it refundable.
+  childTaxCredit: {
+    perChild: 2_200,
+    refundablePerChild: 1_700,
+    refundableRate: 0.15,
+    earnedIncomeFloor: 2_500,
+    phaseOutStart: { single: 200_000, mfj: 400_000, hoh: 200_000 },
+    phaseOutPer1000: 50,
+  },
   mileage: {
     periods: [
       { from: "2026-01-01", to: "2026-06-30", centsPerMile: 72.5 },

@@ -57,8 +57,8 @@ describe("hand-computed returns", () => {
 
   it("no-tax-on-tips phases out by $100 per $1,000 of MAGI over $150k", () => {
     const t = computeTax({ ...base, payments: income(180_000), qualifiedTips: 25_000 });
-    // AGI 167,283.40 → over by 17,283.40 → 18 steps × $100
-    expect(t.tipsDeduction).toBe(23_200);
+    // AGI 167,283.40 → over by 17,283.40 → 17 full $1,000 steps × $100
+    expect(t.tipsDeduction).toBe(23_300);
   });
 
   it("tips never exceed the cap or the net profit", () => {
@@ -140,5 +140,35 @@ describe("state hardening", () => {
   it("caps huge shared payloads at 500 rows", () => {
     const many = Array.from({ length: 2_000 }, (_, i) => ({ id: `p${i}`, date: "2026-01-01", source: "x", amount: 1 }));
     expect(sanitize({ payments: many })?.payments).toHaveLength(500);
+  });
+});
+
+describe("families", () => {
+  it("child tax credit offsets income tax first, then self-employment tax (HoH, $40k, one child)", () => {
+    const t = computeTax({ ...base, filingStatus: "hoh", payments: income(40_000), kidsUnder17: 1 });
+    expect(t.childTaxCredit).toBe(2_200);
+    // income tax 1,041.93 + SE tax 5,651.82 − credit 2,200
+    expect(t.federalTotal).toBeCloseTo(4_493.75, 1);
+  });
+
+  it("refundable part is capped at $1,700 per child when there is no income tax", () => {
+    const t = computeTax({ ...base, filingStatus: "hoh", payments: income(20_000), kidsUnder17: 1 });
+    expect(t.incomeTax).toBe(0);
+    expect(t.childTaxCredit).toBe(1_700);
+    expect(t.federalTotal).toBeCloseTo(2_825.91 - 1_700, 1);
+  });
+
+  it("child tax credit phases out by $50 per $1,000 of AGI above $200k", () => {
+    // AGI 235,213.31 → 36 steps × $50 = $1,800 off the $2,200 credit
+    expect(computeTax({ ...base, payments: income(250_000), kidsUnder17: 1 }).childTaxCredit).toBe(400);
+  });
+
+  it("no children means no credit", () => {
+    expect(computeTax({ ...base, payments: income(60_000) }).childTaxCredit).toBe(0);
+  });
+
+  it("joint filers: W-2 wages (possibly the spouse's) do not shrink the freelancer's Social Security cap", () => {
+    const t = computeTax({ ...base, filingStatus: "mfj", payments: income(60_000), w2Wages: 184_500 });
+    expect(t.seTax).toBeCloseTo(8_477.73, 1);
   });
 });

@@ -111,6 +111,13 @@ async function submitFormOf(page, selector) {
   }, selector);
   await sleep(250);
 }
+async function activatePro(page) {
+  await clickButton(page, /^Get my plan$/);
+  await clickButton(page, /^Activate Pro \(demo\)$/);
+  await sleep(300);
+}
+const paywallOpen = (page) =>
+  page.evaluate(() => !!document.querySelector('[role="dialog"][aria-label="Stash1099 Pro"]'));
 const noOverflow = (page) => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1);
 const read = {
   safe: (p) => grab(p, /SAFE TO SPEND[\s\S]{0,80}?(-?\$[\d,]+)/i),
@@ -122,7 +129,7 @@ const read = {
   coveredPct: (p) => grab(p, /covered \((\d+)%\)/),
   needed: (p) => grab(p, /(\$[\d,]+) needed for 2026/),
   total: (p) => grab(p, /Total 2026 tax: (\$[\d,]+)/),
-  rate: (p) => grab(p, /SET ASIDE FROM NEW PAYOUTS\s+(\d+)%/i),
+  rate: (p) => grab(p, /WITHHOLD FROM NEW PAYOUTS\s+(\d+)%/i),
   avg: (p) => grab(p, /(\d+)% average for 2026/),
   days: (p) => grab(p, /NEXT IRS DEADLINE\s+(\d+) days/i),
   penalty: (p) => grab(p, /PENALTY SO FAR\s+(\$[\d.,]+)/i),
@@ -177,36 +184,48 @@ await check("Meta description present", async () => {
 });
 await check("Exactly one H1 with the core promise", async () => {
   const h = await page.$$eval("h1", (x) => x.map((e) => e.textContent));
-  expect(h.length === 1 && /belongs to the IRS/.test(h[0]), JSON.stringify(h));
+  expect(h.length === 1 && /Nobody withholds your taxes/.test(h[0]), JSON.stringify(h));
 });
-await check("CTA → /plan", async () => {
+await check("Main CTA → 60-second quiz (/start)", async () => {
   const href = await page.$$eval("a", (as) =>
-    as.find((a) => /Show my safe-to-spend/.test(a.textContent))?.getAttribute("href"),
+    as.find((a) => /Take the 60-second check/.test(a.textContent))?.getAttribute("href"),
   );
-  expect(href === "/plan", href);
+  expect(href === "/start", href);
 });
 await check("Demo link → /plan?demo=maya", async () => {
-  const href = await page.$$eval("a", (as) => as.find((a) => /real example/.test(a.textContent))?.getAttribute("href"));
+  const href = await page.$$eval("a", (as) =>
+    as.find((a) => /Maya.s example/.test(a.textContent))?.getAttribute("href"),
+  );
   expect(href === "/plan?demo=maya", href);
 });
 await check("Countdown = days to next IRS deadline", async () => {
   const d = Number(await grab(page, /DEADLINE\s+(\d+)\s*days/i));
   expect(d === daysTo(NEXT_DUE), `${d} vs ${daysTo(NEXT_DUE)}`);
 });
-await check("Market stats shown (74.9M, 3.16M, 1 in 5)", async () => {
+await check("Market stats shown (74.9M, 58%, 3.16M)", async () => {
   const t = await text(page);
   expect(
-    ["74.9M", "3.16M", "1 in 5"].every((s) => t.includes(s)),
+    ["74.9M", "58%", "3.16M"].every((s) => t.includes(s)),
     "missing stat",
   );
 });
 await check("Every stat has a source line", async () => {
   const t = await text(page);
-  expect(/MBO Partners/.test(t) && /IRS Data Book 2025/.test(t) && /Penny Hoarder/.test(t), "source missing");
+  expect(/MBO Partners/.test(t) && /IRS Data Book 2025/.test(t) && /SHED 2025/.test(t), "source missing");
 });
-await check("Pricing: $8/month and $59/year", async () => {
+await check("Pricing: 1/4/12-week plans priced per day", async () => {
   const t = await text(page);
-  expect(/\$8\s*\/month/.test(t) && /\$59\/year/.test(t), "pricing missing");
+  expect(
+    /1 week/.test(t) && /4 weeks/.test(t) && /12 weeks/.test(t) && /\$0\.71/.test(t) && /per day/.test(t),
+    "pricing missing",
+  );
+});
+await check("Hero widget: two numbers → what is really yours (real engine)", async () => {
+  await typeInto(page, 'input[placeholder="48,000"]', "48000");
+  const owed = await grab(page, /Tax already owed on that income\s+(\$[\d,]+)/i);
+  await typeInto(page, 'input[placeholder="4,200"]', "4200");
+  const yours = await grab(page, /Really yours\s+(-?\$[\d,]+)/i);
+  expect(owed && yours && (!DEMO_DAY || (owed === "$9,271" && yours === "-$5,071")), `${owed} / ${yours}`);
 });
 await check("Disclaimer: not tax advice", async () =>
   expect(/not tax, legal or financial/.test(await text(page)), "no disclaimer"),
@@ -288,7 +307,7 @@ await check("15 payouts in the log, received $51,610", async () => {
   expect((await read.rows(page)) === 15 && money(await read.received(page)) === 51610, "log");
 });
 if (DEMO_DAY) {
-  await check("Exact demo figures for the pitch (−$1,483 / $7,935 / $6,935 / 22% / 17%)", async () => {
+  await check("Exact demo figures for the pitch (−$1,257 / $7,935 / $6,935 / 23% / 17%)", async () => {
     const got = [
       await read.safe(page),
       await read.owed(page),
@@ -296,9 +315,21 @@ if (DEMO_DAY) {
       await read.rate(page),
       await read.avg(page),
     ];
-    expect(JSON.stringify(got) === JSON.stringify(["-$1,483", "$7,935", "$6,935", "22", "17"]), JSON.stringify(got));
+    expect(JSON.stringify(got) === JSON.stringify(["-$1,257", "$7,935", "$6,935", "23", "17"]), JSON.stringify(got));
   });
 }
+await check("Tax-ready score shown with its 4 parts (100 points)", async () => {
+  const t = await text(page);
+  const sc = Number(await grab(page, /Tax-ready score[\s\S]{0,40}?(\d+)/));
+  expect(
+    /Tax-ready score/.test(t) && /At risk|Almost there|IRS-ready/.test(t) && (!DEMO_DAY || /\b47\b/.test(t)),
+    `score ${sc}`,
+  );
+});
+await check("Pro features are visibly locked for a free user", async () => {
+  const t = await text(page);
+  expect(/Unlock the catch-up plan/.test(t) && /Upgrade/.test(t), "no lock");
+});
 await check("No NaN / Infinity / undefined on screen", async () =>
   expect(!/NaN|Infinity|undefined/.test(await text(page)), "bad value"),
 );
@@ -308,13 +339,15 @@ await check("Numbers use US format even in ru browser", async () =>
 
 /* ===== C. Interactions ===== */
 section = "Interactions";
-await check("I just got paid $1,200 → $933 yours / $267 stash", async () => {
+await check("I just got paid $1,200 → pay stub: $923 yours / $277 withheld", async () => {
   await typeInto(page, 'input[placeholder="1,200"]', "1200");
   await page.keyboard.press("Enter");
   await sleep(400);
   const y = money(await grab(page, /Yours to spend\s+(\$[\d,]+)/));
   const s = money(await grab(page, /Move to tax savings\s+(\$[\d,]+)/));
-  expect(y + s === 1200 && (!DEMO_DAY || (y === 933 && s === 267)), `${y}/${s}`);
+  const se = money(await grab(page, /self-employment tax\)\s+(\$[\d,]+)/));
+  const fit = money(await grab(page, /Federal income tax\s+(\$[\d,]+)/));
+  expect(y + s === 1200 && se + fit === s && (!DEMO_DAY || (y === 923 && s === 277)), `${y}/${s} (${se}+${fit})`);
 });
 await check("Payout added to the log (16 rows, +$1,200)", async () => {
   expect((await read.rows(page)) === 16 && money(await read.received(page)) === 52810, "not added");
@@ -409,6 +442,26 @@ await check("Bank CSV: duplicates of logged payouts flagged", async () => {
   const n = ((await text(page)).match(/Already in your income log/g) || []).length;
   expect(n === 2, `dupes ${n}`);
 });
+await check("Free user: adding imported payouts opens the Pro paywall (plans priced per day)", async () => {
+  const before = money(await read.received(page));
+  await clickButton(page, /^Add \d+ payouts/);
+  const t = await text(page);
+  expect(
+    (await paywallOpen(page)) &&
+      /Bank import is part of Pro/.test(t) &&
+      /\$0\.71/.test(t) &&
+      money(await read.received(page)) === before,
+    "no paywall",
+  );
+});
+await check("Paywall: demo checkout says nothing is charged, then unlocks Pro", async () => {
+  await clickButton(page, /^Get my plan$/);
+  const t = await text(page);
+  expect(/nothing is charged/i.test(t), "no honesty note");
+  await clickButton(page, /^Activate Pro \(demo\)$/);
+  await sleep(300);
+  expect(!(await paywallOpen(page)) && /Pro \(demo\) ✓/.test(await text(page)), "not unlocked");
+});
 await check("Bank CSV: 'Add N payouts' adds exactly that sum", async () => {
   const before = money(await read.received(page));
   const label = await page.evaluate(() =>
@@ -439,6 +492,38 @@ await check("Calendar export: deadlines + weekly check-in at the app's rate", as
 await check("Calendar events carry 3-day alarms", async () => {
   const ics = await page.evaluate(() => window.__ics);
   expect(/TRIGGER:-P3D/.test(ics) && /SUMMARY:Pay IRS estimated tax: \$[\d,]+/.test(ics), "alarm");
+});
+await check("Pro catch-up plan: spread the gap over the next payouts", async () => {
+  const t0 = await text(page);
+  if (!/Behind \$/.test(t0)) {
+    await typeInto(page, 'input[placeholder="1,200"]', "9000");
+    await page.keyboard.press("Enter");
+    await sleep(300);
+  }
+  const t = await text(page);
+  expect(/Hold back \d+% of your next 8 payouts/.test(t), "no catch-up plan");
+});
+await check("Weekly payday check-in starts a streak", async () => {
+  await clickButton(page, /^Finish this week.s payday check-in$/);
+  const t = await text(page);
+  expect(/Checked in this week/.test(t) && /1-week streak/.test(t), "no streak");
+});
+await check("Tax-pro export (Pro) downloads a CSV with the income log and estimates", async () => {
+  await page.evaluate(() => {
+    window.__csv = null;
+    const orig = URL.createObjectURL;
+    URL.createObjectURL = (b) => {
+      b.text().then((t) => (window.__csv = t));
+      return orig(b);
+    };
+    HTMLAnchorElement.prototype.click = function () {
+      window.__dl = this.download;
+    };
+  });
+  await clickButton(page, /^Download summary \(CSV\)$/);
+  await sleep(500);
+  const { csv, dl } = await page.evaluate(() => ({ csv: window.__csv, dl: window.__dl }));
+  expect(dl === "stash1099-2026-summary.csv" && /1099 INCOME LOG/.test(csv) && /Self-employment tax,/.test(csv), "csv");
 });
 let shareLink = "";
 await check("Share link copies a private URL (#s=…)", async () => {
@@ -504,7 +589,7 @@ await check("3 answers → safe-to-spend appears", async () => {
   await clickButton(fresh, /^Show my safe-to-spend$/);
   await sleep(400);
   const s = await read.safe(fresh);
-  expect(s && (!DEMO_DAY || s === "-$5,297"), s);
+  expect(s && (!DEMO_DAY || s === "-$5,071"), s);
 });
 await check("Full plan visible after quick start", async () => {
   const t = await text(fresh);
@@ -544,8 +629,75 @@ await check("Real file upload: a Bank of America CSV through the file picker", a
   await sleep(700);
   expect(/Bank of America: 2 deposits found, 1 spending rows ignored/.test(await text(fresh)), "file not parsed");
   await clickButton(fresh, /^Add 1 payouts/);
+  if (await paywallOpen(fresh)) {
+    await activatePro(fresh);
+    await clickButton(fresh, /^Add 1 payouts/);
+  }
   await sleep(300);
   expect(money(await read.received(fresh)) === 310 && /Your payment plan/.test(await text(fresh)), "payout not added");
+});
+
+/* ===== D2. Quiz funnel ===== */
+section = "Quiz funnel";
+const quiz = await (await browser.createBrowserContext()).newPage();
+watch(quiz, "quiz");
+await quiz.setViewport({ width: 1440, height: 1000 });
+await quiz.goto(BASE + "/start", { waitUntil: "networkidle0" });
+await sleep(300);
+await check("Quiz opens at step 1 with a progress bar", async () => {
+  const t = await text(quiz);
+  expect(/Step 1 of \d/.test(t) && (await quiz.$('[role="progressbar"]')), "no quiz");
+});
+await check("Quiz: 7 steps answered end to end", async () => {
+  await clickButton(quiz, /^Both clients and gig apps$/);
+  await typeInto(quiz, 'input[placeholder="48,000"]', "48000");
+  await clickButton(quiz, /^Continue$/);
+  await clickButton(quiz, /^Head of household$/);
+  await clickButton(quiz, /^1$/);
+  await clickButton(quiz, /^Continue$/);
+  await clickButton(quiz, /^No \(Texas/);
+  await clickButton(quiz, /^Nothing yet$/);
+  await typeInto(quiz, 'input[placeholder="4,200"]', "4200");
+  await clickButton(quiz, /^Continue$/);
+  await clickButton(quiz, /^I owed more than I expected$/);
+  await clickButton(quiz, /^Show my numbers$/);
+  await sleep(2200);
+  expect(/Your 2026 tax picture/.test(await text(quiz)), "no result");
+});
+await check("Result: personal headline, safe to spend, April bill, score", async () => {
+  const t = await text(quiz);
+  expect(
+    /already spent \$[\d,]+ of the IRS/.test(t) &&
+      /SAFE TO SPEND/i.test(t) &&
+      /April 15 bill/i.test(t) &&
+      /Tax-ready score: \d+ \/ 100/.test(t),
+    t.slice(0, 200),
+  );
+});
+await check("Result: next $1,000 payout shown as a pay stub that adds up", async () => {
+  const se = money(await grab(quiz, /self-employment tax\)\s+(\$[\d,]+)/));
+  const fit = money(await grab(quiz, /Federal income tax\s+(\$[\d,]+)/));
+  const home = money(await grab(quiz, /Take-home: yours to spend\s+(\$[\d,]+)/));
+  expect(se + fit + home === 1000, `${se}+${fit}+${home}`);
+});
+await check("Child tax credit lowers the bill (HoH with 1 child vs none)", async () => {
+  const withKid = money(await grab(quiz, /April 15 bill at this pace\s+(\$[\d,]+)/i));
+  expect(withKid > 0 && withKid < 10_866, `${withKid}`);
+});
+await check("Result: 'See Pro plans' opens the paywall; 'Not now' closes it", async () => {
+  await clickButton(quiz, /^See Pro plans$/);
+  const open = await paywallOpen(quiz);
+  await clickButton(quiz, /^Not now, continue with Free$/);
+  expect(open && !(await paywallOpen(quiz)), "paywall");
+});
+await check("Free plan carries the quiz answers into the app", async () => {
+  await clickButton(quiz, /^Continue with the free plan$/);
+  await sleep(1500);
+  const t = await text(quiz);
+  expect(
+    quiz.url().endsWith("/plan") && money(await read.received(quiz)) === 48000 && /Head of household/.test(t),
+    quiz.url(),
+  );
 });
 
 /* ===== E. Mobile ===== */
@@ -554,6 +706,7 @@ const mobile = await (await browser.createBrowserContext()).newPage();
 watch(mobile, "mobile");
 await mobile.setViewport({ width: 375, height: 812, isMobile: true, hasTouch: true });
 for (const [name, path] of [
+  ["Quiz", "/start"],
   ["Landing", "/"],
   ["Demo", "/plan?demo=maya"],
   ["Quick start", "/plan"],
@@ -579,7 +732,7 @@ await check("Main CTA is a comfortable tap target (≥ 44px)", async () => {
   const h = await mobile.evaluate(
     () =>
       [...document.querySelectorAll("a")]
-        .find((a) => /Show my safe-to-spend/.test(a.textContent))
+        .find((a) => /Take the 60-second check/.test(a.textContent))
         ?.getBoundingClientRect().height,
   );
   expect(h >= 44, `${h}px`);
@@ -637,9 +790,11 @@ await check("Sample CSV served as text/csv with Chase header", async () => {
   );
 });
 await check("Favicon served", async () => expect((await head("/favicon.ico")).status === 200, "no favicon"));
-await check("HTTPS with HSTS", async () =>
-  expect(!!(await head("/")).headers.get("strict-transport-security"), "no HSTS"),
-);
+if (BASE.startsWith("https"))
+  await check("HTTPS with HSTS", async () =>
+    expect(!!(await head("/")).headers.get("strict-transport-security"), "no HSTS"),
+  );
+await check("/start (quiz) is served", async () => expect((await head("/start")).status === 200, "no quiz page"));
 await check("/plan is prerendered static HTML", async () => {
   const html = await (await head("/plan")).text();
   expect(/Stash1099/.test(html) && /<html lang="en"/.test(html), "not prerendered");

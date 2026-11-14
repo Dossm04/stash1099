@@ -1,5 +1,7 @@
 import Link from "next/link";
 import Countdown from "@/components/Countdown";
+import HeroWidget from "@/components/HeroWidget";
+import { PLANS, PRO_FEATURES, pricePerDay } from "@/lib/pro";
 
 const STATS = [
   {
@@ -8,60 +10,56 @@ const STATS = [
     src: "MBO Partners, State of Independence 2026",
   },
   {
+    big: "58%",
+    text: "of self-employed adults have income that swings from month to month; 22% could not pay bills because of it.",
+    src: "Federal Reserve, SHED 2025 (May 2026)",
+  },
+  {
     big: "3.16M",
     text: "new IRS payment plans in FY2025 for tax bills that could not be paid at once: $17.9B paid through them.",
     src: "IRS Data Book 2025, Table 4-1",
-  },
-  {
-    big: "1 in 5",
-    text: "side hustlers set aside nothing for taxes or do not know what they owe. Only 43% save and pay at filing.",
-    src: "The Penny Hoarder / Pollfish, n=1,000, Feb 2026",
   },
 ];
 
 const STEPS = [
   [
-    "Drop in your bank CSV",
-    "We spot payouts from Uber, DoorDash, Upwork, Stripe and more, and skip transfers and refunds. No bank login, no signup.",
+    "Tell us what you earned",
+    "Type a number, paste payouts, or drop in your bank export: we find the deposits from Uber, DoorDash, Upwork, Stripe and more.",
   ],
   [
-    "Get your number",
-    "We run the real 2026 IRS math (SE tax, brackets, QBI, the new no-tax-on-tips deduction) and project your year.",
+    "Every payout becomes a paycheck",
+    "You get a pay stub: Social Security and Medicare, federal and state tax withheld, and the take-home that is really yours.",
   ],
   [
-    "Stash & pay on time",
-    "Every new payment is split into “yours” and “tax”. Deadlines go to your calendar with the exact amount.",
+    "Friday is payday",
+    "A two-minute weekly check-in: move the withheld tax, see your tax-ready score, and know the exact amount for the next IRS deadline.",
   ],
 ];
 
 const DIFF = [
   [
-    "Safe to spend, computed, not guessed",
-    "Your balance minus the tax you have already earned but not set aside, from real 2026 IRS math, not a flat rate you type in.",
-  ],
-  [
     "Your real rate, not “save 30%”",
-    "Each payout is quoted at the exact tax it adds: SE tax plus your bracket, after the standard deduction, QBI and tips. Early in the year that can be 14%; later, 22%+.",
+    "Each payout is withheld at the tax it actually adds: about 14% early in the year, 23% or more once your standard deduction is used up.",
   ],
   [
-    "A stash that tells you if you’re behind",
-    "Log what you moved to tax savings. One bar shows how much of this year’s tax is covered and exactly how much to move to catch up.",
+    "Safe to spend, computed",
+    "Your balance minus the tax you already owe on money you already earned. One number to check before you spend.",
   ],
   [
-    "Penalty-proof minimum",
-    "We find the cheapest legal safe harbor (90% of this year or 100–110% of last year) so you keep more cash until April.",
+    "The legal minimum for the IRS",
+    "We find the cheapest safe harbor for each quarterly deadline and show what the penalty costs per day if you wait.",
   ],
   [
-    "Live penalty counter",
-    "See what you’ve already accrued and what it will be by April, computed day by day like IRS Form 2210.",
+    "Built for 2026 rules",
+    "No tax on tips for delivery drivers and servers, the mid-year mileage change, and the new $2,000 threshold for 1099 forms: in January your bank export may be your only record.",
   ],
   [
-    "Uneven income friendly",
-    "Built for gig and freelance paychecks: each payout updates your set-aside rate instantly.",
+    "A score and a streak",
+    "Your tax-ready score moves with every payout you log and every dollar you set aside. Keep the Friday streak alive.",
   ],
   [
     "Private by design",
-    "All math runs in your browser. Your plan is saved locally or in a private link, never on our servers.",
+    "All the math runs in your browser. No signup, no bank login; your plan is saved on your device or in a private link.",
   ],
 ];
 
@@ -80,60 +78,39 @@ export default function Home() {
         </Link>
       </header>
 
-      <section className="mx-auto grid max-w-6xl items-center gap-10 px-4 pb-16 pt-10 lg:grid-cols-[1.3fr_1fr]">
+      <section className="mx-auto grid max-w-6xl items-start gap-10 px-4 pb-16 pt-8 lg:grid-cols-[1.15fr_1fr]">
         <div>
           <p className="mb-4 inline-block rounded-full bg-brand-soft px-3 py-1 text-sm font-medium text-brand">
-            For US freelancers & gig workers
+            Payroll for one · for US freelancers & gig workers
           </p>
           <h1 className="text-4xl font-bold leading-tight tracking-tight sm:text-5xl">
-            Part of your bank balance belongs to the IRS. See how much is actually yours.
+            Nobody withholds your taxes. So part of your bank balance is not yours.
           </h1>
           <p className="mt-5 max-w-xl text-lg text-muted">
-            No employer withholds a freelancer&apos;s taxes, so the money in checking looks bigger than it is, until
-            April sends a bill for thousands. Stash1099 shows what is safe to spend right now, what to set aside from
-            each payout, and the least you must pay by each IRS deadline.
+            An employer takes tax out of every paycheck. With 1099 income nobody does, so the money in checking looks
+            bigger than it is, until April sends a bill for thousands. Stash1099 turns every payout into a paycheck: tax
+            withheld, the rest really yours.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             <Link
-              href="/plan"
+              href="/start"
               className="rounded-xl bg-brand px-6 py-3.5 font-semibold text-brand-ink shadow-sm hover:opacity-95"
             >
-              Show my safe-to-spend
+              Take the 60-second check
             </Link>
             <Link
               href="/plan?demo=maya"
               className="rounded-xl border border-line bg-surface px-6 py-3.5 font-semibold hover:bg-surface-2"
             >
-              See a real example →
+              See Maya&apos;s example →
             </Link>
           </div>
           <p className="mt-3 text-sm text-muted">Free · No signup · Nothing leaves your browser</p>
-        </div>
-        <div className="space-y-3">
-          <Countdown />
-          <div className="rounded-2xl border border-line bg-surface p-5 shadow-sm">
-            <div className="text-sm text-muted">Maya, freelance designer, has $4,200 in checking</div>
-            <div className="mt-1 flex items-baseline gap-2">
-              <span className="tnum text-4xl font-bold text-danger">-$1,483</span>
-              <span className="text-sm text-muted">safe to spend</span>
-            </div>
-            <p className="mt-1 text-sm text-muted">
-              She has already spent $1,483 of the IRS&apos;s money. Her April bill: <b className="text-ink">$7,935</b>,
-              with $1,000 saved.
-            </p>
-            <div className="mt-3 text-sm text-muted">Then a client pays her $1,200:</div>
-            <div className="mt-2 grid grid-cols-2 gap-2 text-center">
-              <div className="rounded-xl bg-surface-2 p-3">
-                <div className="text-xs text-muted">Hers to spend</div>
-                <div className="tnum text-2xl font-bold">$933</div>
-              </div>
-              <div className="rounded-xl bg-brand p-3 text-brand-ink">
-                <div className="text-xs opacity-80">Tax savings</div>
-                <div className="tnum text-2xl font-bold">$267</div>
-              </div>
-            </div>
+          <div className="mt-8 max-w-sm">
+            <Countdown />
           </div>
         </div>
+        <HeroWidget />
       </section>
 
       <section className="border-y border-line bg-surface">
@@ -163,7 +140,7 @@ export default function Home() {
 
       <section className="mx-auto max-w-6xl px-4 pb-16">
         <h2 className="text-3xl font-bold tracking-tight">Not another tax calculator</h2>
-        <div className="mt-8 grid gap-4 sm:grid-cols-2">
+        <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {DIFF.map(([t, d]) => (
             <div key={t} className="rounded-2xl border border-line bg-surface p-5">
               <h3 className="font-semibold">{t}</h3>
@@ -173,44 +150,58 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="mx-auto max-w-6xl px-4 pb-20">
+      <section className="mx-auto max-w-6xl px-4 pb-20" id="pricing">
         <h2 className="text-3xl font-bold tracking-tight">Pricing</h2>
-        <div className="mt-8 grid gap-4 sm:grid-cols-2">
+        <p className="mt-2 max-w-2xl text-muted">
+          Free shows you the numbers. Pro keeps you on plan every week. An IRS payment plan on a $5,000 bill costs about
+          $300 a year, a credit card about $1,000.
+        </p>
+        <div className="mt-8 grid gap-4 lg:grid-cols-[1fr_1.6fr]">
           <div className="rounded-2xl border border-line bg-surface p-6">
             <h3 className="text-lg font-semibold">Free</h3>
             <div className="tnum mt-2 text-4xl font-bold">$0</div>
             <ul className="mt-4 space-y-2 text-muted">
-              <li>✓ Full 2026 tax plan & safe-harbor minimum</li>
-              <li>✓ Penalty counter & quarterly schedule</li>
-              <li>✓ Calendar export</li>
+              <li>✓ Safe to spend and your April bill</li>
+              <li>✓ A pay stub for every payout you type in</li>
+              <li>✓ The IRS minimum for each deadline</li>
+              <li>✓ Tax-ready score</li>
             </ul>
           </div>
           <div className="rounded-2xl border-2 border-brand bg-surface p-6">
             <h3 className="text-lg font-semibold">Pro</h3>
-            <div className="mt-2 text-4xl font-bold">
-              <span className="tnum">$8</span>
-              <span className="text-base font-normal text-muted">/month · or $59/year</span>
+            <div className="mt-3 grid gap-3 sm:grid-cols-3">
+              {PLANS.map((p) => (
+                <div
+                  key={p.id}
+                  className={`rounded-xl border p-3 ${p.badge ? "border-brand bg-brand-soft" : "border-line"}`}
+                >
+                  <div className="text-sm font-semibold">{p.label}</div>
+                  <div className="tnum mt-1 text-2xl font-bold">${pricePerDay(p).toFixed(2)}</div>
+                  <div className="text-xs text-muted">per day · ${p.price.toFixed(2)} total</div>
+                  {p.badge && <div className="mt-1 text-xs font-semibold text-brand">{p.badge}</div>}
+                </div>
+              ))}
             </div>
             <ul className="mt-4 space-y-2 text-muted">
-              <li>✓ SMS nudge with the exact amount on every payout & deadline</li>
-              <li>✓ Exact state tax for all 50 states</li>
-              <li>✓ Annualized-income method for very lumpy years</li>
-              <li>✓ One-click export for your CPA</li>
+              {PRO_FEATURES.map(([name, text]) => (
+                <li key={name}>
+                  ✓ <b className="text-ink">{name}.</b> {text}
+                </li>
+              ))}
             </ul>
-            <p className="mt-4 text-sm text-muted">
-              Avoiding one average IRS penalty (~$766) pays for 13 years of Pro.
-            </p>
+            <p className="mt-4 text-sm text-muted">30-day money-back guarantee · Cancel anytime</p>
           </div>
         </div>
         <div className="mt-10 text-center">
-          <Link href="/plan" className="rounded-xl bg-brand px-6 py-3.5 font-semibold text-brand-ink">
-            Build my plan now
+          <Link href="/start" className="rounded-xl bg-brand px-6 py-3.5 font-semibold text-brand-ink">
+            Take the 60-second check
           </Link>
         </div>
       </section>
 
       <footer className="border-t border-line py-8 text-center text-xs text-muted">
         Stash1099 gives estimates using published IRS rules for tax year 2026. It is not tax, legal or financial advice.
+        Hackathon demo: Pro checkout is simulated and nothing is charged.
       </footer>
     </div>
   );
