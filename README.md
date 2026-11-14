@@ -6,7 +6,7 @@ Track: **Money**. User: a US freelancer/gig worker aged 25–45 with uneven 1099
 
 ## Try it
 
-- Live: _see the repo description_ 
+- **Live: https://stash1099.vercel.app** (no signup)
 - Click **"See a real example"** to load Maya: a freelance UX designer in Austin who also drives for DoorDash, paid Q1 and missed Q2–Q3.
 - Hit **"I just got paid"**, type `1200`, and watch it split into "yours" and "tax savings".
 
