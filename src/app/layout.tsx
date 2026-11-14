@@ -6,9 +6,9 @@ const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Stash1099 — never get an IRS underpayment penalty again",
+  title: "Stash1099 — how much of your balance is actually yours",
   description:
-    "For US freelancers and gig workers: know exactly how much of every payment to set aside, what to pay by each IRS deadline, and how to stop the underpayment penalty. No signup.",
+    "For US freelancers and gig workers: see what is safe to spend, exactly how much of every payout to set aside for taxes, and the IRS minimum for each deadline. No signup, no bank login.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
