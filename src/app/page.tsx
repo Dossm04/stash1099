@@ -3,19 +3,19 @@ import Countdown from "@/components/Countdown";
 
 const STATS = [
   {
-    big: "72.9M",
-    text: "Americans earned independent 1099 income in 2025. Nobody withholds tax for them.",
-    src: "MBO Partners, State of Independence 2025",
+    big: "74.9M",
+    text: "Americans now work independently, a record. Nobody withholds tax for them.",
+    src: "MBO Partners, State of Independence 2026",
   },
   {
-    big: "~14M",
-    text: "taxpayers were hit with the estimated-tax underpayment penalty in one year: about $7B in total.",
-    src: "IRS Data Book FY2023 (via Fox Business)",
+    big: "15.7M",
+    text: "estimated-tax underpayment penalties in FY2025: $12.1B, ~$766 on average. Only 1.4% were forgiven.",
+    src: "IRS Data Book 2025, Table 4-2",
   },
   {
-    big: "37%",
-    text: "of US adults couldn’t cover a surprise $400 bill with cash. A surprise April tax bill is often $3,000+.",
-    src: "Federal Reserve SHED 2025",
+    big: "49%",
+    text: "of independent workers don’t pay quarterly at all, and 63% fear owing more than they expect.",
+    src: "Independent Economy Council survey, n=1,000 (2022)",
   },
 ];
 
@@ -181,7 +181,7 @@ export default function Home() {
               <li>✓ Annualized-income method for very lumpy years</li>
               <li>✓ One-click export for your CPA</li>
             </ul>
-            <p className="mt-4 text-sm text-muted">Avoiding one average IRS penalty (~$500) pays for 5+ years.</p>
+            <p className="mt-4 text-sm text-muted">Avoiding one average IRS penalty (~$766) pays for 13 years of Pro.</p>
           </div>
         </div>
         <div className="mt-10 text-center">

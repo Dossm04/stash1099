@@ -2,7 +2,7 @@
 
 **Live: https://stash1099.vercel.app** · no signup, works on phone · Track: **Money** · Business Cup 2.0
 
-**72.9M Americans earn 1099 income and nobody withholds their tax.** Every April millions get a bill they didn't save for, and ~14M a year also pay an IRS underpayment penalty for skipping quarterly payments. Stash1099 answers the question a freelancer has every time money lands: **"how much of this is actually mine?"**, and tells them the **minimum to pay by each IRS deadline so the penalty is zero.**
+**74.9M Americans work independently and nobody withholds their tax.** Every April millions get a bill they didn't save for, and the IRS assessed **15.7M estimated-tax underpayment penalties ($12.1B) in FY2025**, only 1.4% of them forgiven (IRS Data Book 2025, Table 4-2). Stash1099 answers the question a freelancer has every time money lands: **"how much of this is actually mine?"**, and tells them the **minimum to pay by each IRS deadline so the penalty is zero.**
 
 - **User:** a US freelancer or gig worker aged 25–45 with uneven 1099 income (e.g. a designer who also drives DoorDash).
 - **Pays for:** Pro at **$8/month or $59/year**: SMS nudges with the exact amount on every payout and deadline, all 50 states, CPA export.
