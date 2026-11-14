@@ -303,7 +303,7 @@ export default function PlanApp() {
                 />
               </div>
 
-              <ActionPlan plan={plan} today={today} />
+              <ActionPlan plan={plan} today={today} nextRate={nextRate} />
               <Schedule plan={plan} />
               <Breakdown plan={plan} />
             </>
@@ -319,7 +319,7 @@ export default function PlanApp() {
 
           <p className="px-1 text-xs leading-relaxed text-muted">
             Estimates for tax year {YEAR} using IRS Rev. Proc. 2025-32, the{" "}
-            {TAX_2026.se.socialSecurityWageBase.toLocaleString()} Social Security wage base, Form 2210 regular-method
+            {TAX_2026.se.socialSecurityWageBase.toLocaleString("en-US")} Social Security wage base, Form 2210 regular-method
             penalty math and IRS quarterly interest rates. Not tax advice. Everything is computed in your browser;
             nothing is sent to a server.
           </p>
@@ -577,7 +577,7 @@ function StashCard({ stash }: { stash: StashStatus }) {
 
 type Plan = ReturnType<typeof buildPlan>;
 
-function ActionPlan({ plan, today }: { plan: Plan; today: string }) {
+function ActionPlan({ plan, today, nextRate }: { plan: Plan; today: string; nextRate: number }) {
   const [mode, setMode] = useState<"safe" | "exact">("safe");
   const upcoming = mode === "safe" ? plan.upcomingSafe : plan.upcomingExact;
   const items = [
@@ -589,7 +589,7 @@ function ActionPlan({ plan, today }: { plan: Plan; today: string }) {
     const ics = buildIcs(
       items.map((i) => ({ dueDate: i.dueDate, amount: i.amount })),
       window.location.origin + "/plan",
-      { from: today, until: TAX_2026.estimated.returnDueDate, rate: plan.setAsideRate },
+      { from: today, until: TAX_2026.estimated.returnDueDate, rate: nextRate },
     );
     const url = URL.createObjectURL(new Blob([ics], { type: "text/calendar" }));
     const a = document.createElement("a");
@@ -911,7 +911,7 @@ function IncomeLog({
           label="Expected for rest of year"
           value={state.expectedRestOfYear}
           nullable
-          placeholder={`${Math.round(projected).toLocaleString()} (auto)`}
+          placeholder={`${Math.round(projected).toLocaleString("en-US")} (auto)`}
           onChange={(v) => setState((s) => ({ ...s, expectedRestOfYear: v }))}
           hint={state.expectedRestOfYear == null ? "Auto-projected from your pace so far" : "Clear to auto-project"}
         />
