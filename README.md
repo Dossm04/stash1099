@@ -52,7 +52,7 @@ src/lib/exportCsv.ts        tax-pro summary
 src/components/Quiz.tsx     /start quiz → personal result → paywall
 src/components/PlanApp.tsx  the app
 src/components/ProGate.tsx  paywall (1/4/12 weeks, price per day, demo checkout)
-e2e/checks.mjs              105 end-to-end checks in a real Chrome (ru-RU locale)
+e2e/checks.mjs              107 end-to-end checks in a real Chrome (ru-RU locale)
 docs/Stash1099-pitch.pdf    pitch deck
 ```
 
@@ -64,7 +64,7 @@ npm run dev     # http://localhost:3000
 npm test        # 86 unit tests: tax engine vs hand-computed returns (single/MFJ/HoH, SS wage base,
                 #   add'l Medicare, QBI limit, tips, child tax credit), penalty cases, accrual, pay stub,
                 #   score, catch-up, safe-to-spend, 4 bank CSV formats, parser, share link
-npm run e2e     # 105 end-to-end checks against the live site: landing widget, quiz funnel, paywall,
+npm run e2e     # 107 end-to-end checks against the live site: landing widget, quiz funnel, paywall,
                 #   every button, demo math consistency, CSV import, calendar, export, mobile, a11y,
                 #   no third-party requests, no console/hydration errors, repo + PDF
 ```
