@@ -27,9 +27,13 @@ export default function PlanApp() {
     setToday(todayLocal());
     const url = new URL(window.location.href);
     const shared = url.hash.startsWith("#s=") ? decodeShare(url.hash.slice(3)) : null;
+    const demo = url.searchParams.get("demo") === "maya";
     if (shared) setState(shared);
-    else if (url.searchParams.get("demo") === "maya") setState(MAYA_STATE);
+    else if (demo) setState(MAYA_STATE);
     else setState(loadLocal() ?? EMPTY_STATE);
+    // A demo or shared link is a starting point, not a pin: drop it from the address bar so
+    // a reload keeps the user's own edits (saved in local storage) instead of re-loading the link.
+    if (shared || demo) window.history.replaceState(null, "", "/plan");
     setReady(true);
   }, []);
 

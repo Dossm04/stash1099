@@ -57,7 +57,11 @@ docs/Stash1099-pitch.pdf    pitch deck
 ```bash
 npm install
 npm run dev     # http://localhost:3000
-npm test        # 39 unit tests: tax engine vs hand-computed returns, penalty cases, quote, stash, safe-to-spend, 4 bank CSV formats, parser, share link
+npm test        # 55 unit tests: tax engine vs hand-computed returns (single/MFJ/HoH, SS wage base, add'l Medicare,
+                #   QBI limit, tips phase-out), penalty cases, quote, stash, safe-to-spend, 4 bank CSV formats, parser
+npm run e2e     # ~89 end-to-end checks against the live site in a real Chrome with a ru-RU locale:
+                #   every button, demo math consistency, CSV import, calendar, share link, mobile, a11y,
+                #   no third-party requests, no console/hydration errors, repo + PDF
 ```
 
 Stack: Next.js 15 (App Router, static), React 19, TypeScript, Tailwind CSS 4, Vitest; deployed on Vercel. Before each deploy: `npx tsc --noEmit && npm run lint && npm test && npm run build`.

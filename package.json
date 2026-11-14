@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "vitest run"
+    "test": "vitest run",
+    "e2e": "node e2e/checks.mjs"
   },
   "dependencies": {
     "next": "15.5.29",
@@ -22,6 +23,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "15.5.29",
+    "puppeteer-core": "^24.43.1",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^3.2.7"
