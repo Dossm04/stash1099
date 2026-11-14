@@ -106,11 +106,14 @@ export default function Home() {
             </Link>
           </div>
           <p className="mt-3 text-sm text-muted">Free · No signup · Nothing leaves your browser</p>
-          <div className="mt-8 max-w-sm">
+          <div className="mt-8 hidden max-w-sm lg:block">
             <Countdown />
           </div>
         </div>
         <HeroWidget />
+        <div className="max-w-sm lg:hidden">
+          <Countdown />
+        </div>
       </section>
 
       <section className="border-y border-line bg-surface">

@@ -466,6 +466,7 @@ function Result({
         <Tile label="Withhold from each payout" value={pct(nextRate, 0)} sub="your real rate, not a 30% guess" />
         {plan.penaltyAccruedToDate > 0 && (
           <Tile
+            className={hasBalance ? "col-span-2" : ""}
             label="IRS penalty so far"
             value={usd(plan.penaltyAccruedToDate, true)}
             tone="danger"
@@ -616,7 +617,9 @@ function Tile({
   value,
   sub,
   tone = "default",
+  className = "",
 }: {
+  className?: string;
   label: string;
   value: string;
   sub?: string;
@@ -625,7 +628,7 @@ function Tile({
   const bg = { default: "bg-surface", brand: "bg-brand-soft", warn: "bg-warn-soft", danger: "bg-danger-soft" }[tone];
   const ink = { default: "text-ink", brand: "text-brand", warn: "text-warn", danger: "text-danger" }[tone];
   return (
-    <div className={`rounded-2xl border border-line p-4 ${bg}`}>
+    <div className={`rounded-2xl border border-line p-4 ${bg} ${className}`}>
       <div className="text-xs font-medium uppercase tracking-wide text-muted">{label}</div>
       <div className={`tnum mt-1 text-2xl font-bold ${ink}`}>{value}</div>
       {sub && <div className="mt-0.5 text-xs text-muted">{sub}</div>}

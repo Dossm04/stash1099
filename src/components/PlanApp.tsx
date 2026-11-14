@@ -365,21 +365,21 @@ function Header({ onDemo, onReset, onShare }: { onDemo: () => void; onReset: () 
     <header className="border-b border-line bg-surface/80 backdrop-blur">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-4 py-3">
         <Link href="/" className="flex items-center gap-2 font-semibold">
-          <Logo /> Stash1099
+          <Logo /> <span className="hidden sm:inline">Stash1099</span>
         </Link>
         <div className="flex flex-wrap items-center justify-end gap-1 text-xs sm:gap-2 sm:text-sm">
-          <button onClick={onDemo} className="rounded-lg px-3 py-1.5 font-medium text-brand hover:bg-brand-soft">
+          <button onClick={onDemo} className="rounded-lg px-2 py-1.5 sm:px-3 font-medium text-brand hover:bg-brand-soft">
             Maya&apos;s example
           </button>
-          <button onClick={onReset} className="rounded-lg px-3 py-1.5 text-muted hover:bg-surface-2">
+          <button onClick={onReset} className="rounded-lg px-2 py-1.5 sm:px-3 text-muted hover:bg-surface-2">
             Reset
           </button>
-          <button onClick={onShare} className="rounded-lg px-3 py-1.5 font-medium hover:bg-surface-2">
+          <button onClick={onShare} className="rounded-lg px-2 py-1.5 sm:px-3 font-medium hover:bg-surface-2">
             Share link
           </button>
           <button
             onClick={() => gate.open()}
-            className={`rounded-lg px-3 py-1.5 font-semibold ${gate.pro ? "bg-brand-soft text-brand" : "bg-ink text-bg"}`}
+            className={`rounded-lg px-2 py-1.5 sm:px-3 font-semibold ${gate.pro ? "bg-brand-soft text-brand" : "bg-ink text-bg"}`}
           >
             {gate.pro ? "Pro (demo) ✓" : "Upgrade"}
           </button>
@@ -513,7 +513,7 @@ function SafeCard({
         </div>
         <div className="grid w-full grid-cols-2 gap-2 sm:w-80">
           <MoneyField label="Checking balance now" value={balance} nullable onChange={onBalance} placeholder="4,200" />
-          <MoneyField label="Bills before next payout" value={billsDue} onChange={onBills} placeholder="0" />
+          <MoneyField label="Bills before payday" value={billsDue} onChange={onBills} placeholder="0" />
         </div>
       </div>
       {balance != null && (
