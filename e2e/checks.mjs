@@ -36,7 +36,14 @@ async function check(name, fn) {
 function expect(cond, msg) {
   if (!cond) throw new Error(msg);
 }
-const money = (s) => (s == null ? NaN : Number(String(s).replace(/[−–]/g, "-").replace(/[$,\s]/g, "")));
+const money = (s) =>
+  s == null
+    ? NaN
+    : Number(
+        String(s)
+          .replace(/[−–]/g, "-")
+          .replace(/[$,\s]/g, ""),
+      );
 const pad = (n) => String(n).padStart(2, "0");
 const now = new Date();
 const TODAY = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
@@ -101,8 +108,7 @@ async function submitFormOf(page, selector) {
   }, selector);
   await sleep(250);
 }
-const noOverflow = (page) =>
-  page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1);
+const noOverflow = (page) => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1);
 const read = {
   safe: (p) => grab(p, /SAFE TO SPEND[\s\S]{0,80}?(-?\$[\d,]+)/i),
   owed: (p) => grab(p, /Still owed for 2026\s+(\$[\d,]+)/),
@@ -147,7 +153,18 @@ let landingMs = 0;
   landingStatus = r.status();
 }
 await check("HTTP 200", () => expect(landingStatus === 200, `got ${landingStatus}`));
-await check("Loads in < 4 s", () => expect(landingMs < 4000, `${landingMs} ms`));
+const nav = await page.evaluate(() => {
+  const n = performance.getEntriesByType("navigation")[0];
+  return {
+    ttfb: Math.round(n.responseStart),
+    dcl: Math.round(n.domContentLoadedEventEnd),
+    load: Math.round(n.loadEventEnd),
+  };
+});
+await check(
+  `Page ready in < 2.5 s (TTFB ${nav.ttfb} ms, DOM ready ${nav.dcl} ms, load ${nav.load} ms; cold start wall ${landingMs} ms)`,
+  () => expect(nav.dcl < 2500, `${nav.dcl} ms`),
+);
 await check("Title says safe-to-spend message", async () =>
   expect(/actually yours/.test(await page.title()), await page.title()),
 );
@@ -160,7 +177,9 @@ await check("Exactly one H1 with the core promise", async () => {
   expect(h.length === 1 && /belongs to the IRS/.test(h[0]), JSON.stringify(h));
 });
 await check("CTA → /plan", async () => {
-  const href = await page.$$eval("a", (as) => as.find((a) => /Show my safe-to-spend/.test(a.textContent))?.getAttribute("href"));
+  const href = await page.$$eval("a", (as) =>
+    as.find((a) => /Show my safe-to-spend/.test(a.textContent))?.getAttribute("href"),
+  );
   expect(href === "/plan", href);
 });
 await check("Demo link → /plan?demo=maya", async () => {
@@ -173,7 +192,10 @@ await check("Countdown = days to next IRS deadline", async () => {
 });
 await check("Market stats shown (74.9M, 3.16M, 1 in 5)", async () => {
   const t = await text(page);
-  expect(["74.9M", "3.16M", "1 in 5"].every((s) => t.includes(s)), "missing stat");
+  expect(
+    ["74.9M", "3.16M", "1 in 5"].every((s) => t.includes(s)),
+    "missing stat",
+  );
 });
 await check("Every stat has a source line", async () => {
   const t = await text(page);
@@ -183,7 +205,9 @@ await check("Pricing: $8/month and $59/year", async () => {
   const t = await text(page);
   expect(/\$8\s*\/month/.test(t) && /\$59\/year/.test(t), "pricing missing");
 });
-await check("Disclaimer: not tax advice", async () => expect(/not tax, legal or financial/.test(await text(page)), "no disclaimer"));
+await check("Disclaimer: not tax advice", async () =>
+  expect(/not tax, legal or financial/.test(await text(page)), "no disclaimer"),
+);
 await check("No horizontal overflow (desktop)", async () => expect(await noOverflow(page), "overflow"));
 await check("<html lang> set", async () => expect((await page.$eval("html", (h) => h.lang)) === "en", "lang"));
 await check("Viewport meta for mobile", async () => expect(await page.$('meta[name="viewport"]'), "no viewport meta"));
@@ -199,12 +223,17 @@ await page.evaluate(() => localStorage.clear());
 await page.goto(BASE + "/plan?demo=maya", { waitUntil: "networkidle0" });
 await sleep(400);
 
-await check("Safe to spend is negative (spent IRS money)", async () => expect(money(await read.safe(page)) < 0, await read.safe(page)));
+await check("Safe to spend is negative (spent IRS money)", async () =>
+  expect(money(await read.safe(page)) < 0, await read.safe(page)),
+);
 await check("Safe = balance − unstashed tax (= $4,200 − behind)", async () => {
   expect(money(await read.safe(page)) === 4200 - money(await read.behind(page)), "mismatch");
 });
 await check("Shortfall = still owed − tax savings", async () => {
-  expect(money(await read.shortfall(page)) === money(await read.owed(page)) - money(await read.savings(page)), "mismatch");
+  expect(
+    money(await read.shortfall(page)) === money(await read.owed(page)) - money(await read.savings(page)),
+    "mismatch",
+  );
 });
 await check("Still owed = total tax − paid to IRS ($2,000)", async () => {
   expect(money(await read.owed(page)) === money(await read.total(page)) - 2000, "mismatch");
@@ -217,20 +246,33 @@ await check("Covered = $3,000 (stashed) and % consistent", async () => {
   const pct = Number(await read.coveredPct(page));
   expect(c === 3000 && pct === Math.round((3000 / money(await read.total(page))) * 100), `${c} ${pct}`);
 });
-await check("Marginal rate > average rate", async () => expect(Number(await read.rate(page)) > Number(await read.avg(page)), "no"));
-await check("Next deadline days correct", async () => expect(Number(await read.days(page)) === daysTo(NEXT_DUE), "days"));
+await check("Marginal rate > average rate", async () =>
+  expect(Number(await read.rate(page)) > Number(await read.avg(page)), "no"),
+);
+await check("Next deadline days correct", async () =>
+  expect(Number(await read.days(page)) === daysTo(NEXT_DUE), "days"),
+);
 await check("Penalty so far > 0 and smaller than April penalty", async () => {
   const a = money(await read.penalty(page));
   const b = money(await read.aprilPenalty(page));
   expect(a > 0 && b > a, `${a} ${b}`);
 });
-await check("Catch-up today = Q2+Q3 shortfalls ($1,100 + $1,550)", async () => expect(money(await read.catchUp(page)) === 2650, await read.catchUp(page)));
-await check("Jan 15 safe-harbor installment = $6,200 / 4", async () => expect(money(await read.jan(page)) === 1550, await read.jan(page)));
+await check("Catch-up today = Q2+Q3 shortfalls ($1,100 + $1,550)", async () =>
+  expect(money(await read.catchUp(page)) === 2650, await read.catchUp(page)),
+);
+await check("Jan 15 safe-harbor installment = $6,200 / 4", async () =>
+  expect(money(await read.jan(page)) === 1550, await read.jan(page)),
+);
 await check("Skipping Jan 15 costs more than following the plan", async () => {
   const m = (await text(page)).match(/grows to (\$[\d,]+\.\d\d) instead of (\$[\d,]+\.\d\d)/);
   expect(m && money(m[1]) > money(m[2]), m?.[0]);
 });
-for (const [q, s] of [["Q1", "Paid"], ["Q2", "Missed"], ["Q3", "Missed"], ["Q4", "Upcoming"]]) {
+for (const [q, s] of [
+  ["Q1", "Paid"],
+  ["Q2", "Missed"],
+  ["Q3", "Missed"],
+  ["Q4", "Upcoming"],
+]) {
   await check(`Schedule ${q} = ${s}`, async () => {
     const st = await page.evaluate((qq) => {
       const li = [...document.querySelectorAll("ol li")].find((l) => l.textContent.startsWith(qq));
@@ -244,12 +286,22 @@ await check("15 payouts in the log, received $51,610", async () => {
 });
 if (DEMO_DAY) {
   await check("Exact demo figures for the pitch (−$1,483 / $7,935 / $6,935 / 22% / 17%)", async () => {
-    const got = [await read.safe(page), await read.owed(page), await read.shortfall(page), await read.rate(page), await read.avg(page)];
+    const got = [
+      await read.safe(page),
+      await read.owed(page),
+      await read.shortfall(page),
+      await read.rate(page),
+      await read.avg(page),
+    ];
     expect(JSON.stringify(got) === JSON.stringify(["-$1,483", "$7,935", "$6,935", "22", "17"]), JSON.stringify(got));
   });
 }
-await check("No NaN / Infinity / undefined on screen", async () => expect(!/NaN|Infinity|undefined/.test(await text(page)), "bad value"));
-await check("Numbers use US format even in ru browser", async () => expect(/\$51,610/.test(await text(page)), "format"));
+await check("No NaN / Infinity / undefined on screen", async () =>
+  expect(!/NaN|Infinity|undefined/.test(await text(page)), "bad value"),
+);
+await check("Numbers use US format even in ru browser", async () =>
+  expect(/\$51,610/.test(await text(page)), "format"),
+);
 
 /* ===== C. Interactions ===== */
 section = "Interactions";
@@ -309,7 +361,9 @@ await check("W-2 withholding $3,000 lowers 'still owed' by $3,000", async () => 
 await check("Removing a payout lowers income by its amount", async () => {
   const before = money(await read.received(page));
   const ok = await page.evaluate(() => {
-    const b = [...document.querySelectorAll('button[aria-label^="Remove "]')].find((x) => /Fintech/.test(x.getAttribute("aria-label")));
+    const b = [...document.querySelectorAll('button[aria-label^="Remove "]')].find((x) =>
+      /Fintech/.test(x.getAttribute("aria-label")),
+    );
     b?.click();
     return !!b;
   });
@@ -354,7 +408,9 @@ await check("Bank CSV: duplicates of logged payouts flagged", async () => {
 });
 await check("Bank CSV: 'Add N payouts' adds exactly that sum", async () => {
   const before = money(await read.received(page));
-  const label = await page.evaluate(() => [...document.querySelectorAll("button")].map((b) => b.textContent).find((t) => /^Add \d+ payouts/.test(t)));
+  const label = await page.evaluate(() =>
+    [...document.querySelectorAll("button")].map((b) => b.textContent).find((t) => /^Add \d+ payouts/.test(t)),
+  );
   const sum = money(label?.split("·")[1]);
   await clickButton(page, /^Add \d+ payouts/);
   expect(Math.abs(money(await read.received(page)) - before - sum) <= 1, `${label}`); // button shows whole dollars
@@ -384,7 +440,10 @@ await check("Calendar events carry 3-day alarms", async () => {
 let shareLink = "";
 await check("Share link copies a private URL (#s=…)", async () => {
   await page.evaluate(() =>
-    Object.defineProperty(navigator, "clipboard", { value: { writeText: async (t) => (window.__copied = t) }, configurable: true }),
+    Object.defineProperty(navigator, "clipboard", {
+      value: { writeText: async (t) => (window.__copied = t) },
+      configurable: true,
+    }),
   );
   await clickButton(page, /^Share link$/);
   shareLink = await page.evaluate(() => window.__copied);
@@ -396,7 +455,8 @@ await check("Share link restores the same plan in a fresh browser", async () => 
   watch(p2, "share");
   await p2.goto(shareLink.replace("https://stash1099.vercel.app", BASE), { waitUntil: "networkidle0" });
   await sleep(400);
-  const same = (await read.received(p2)) === (await read.received(page)) && (await read.safe(p2)) === (await read.safe(page));
+  const same =
+    (await read.received(p2)) === (await read.received(page)) && (await read.safe(p2)) === (await read.safe(page));
   await ctx.close();
   expect(same, "different");
 });
@@ -424,7 +484,12 @@ await check("Fresh visitor sees quick start, not empty results", async () => {
   expect(/How much of your money is actually yours/.test(t) && !/Your payment plan/.test(t), "wrong state");
 });
 await check("Start button disabled until income entered", async () =>
-  expect(await fresh.evaluate(() => [...document.querySelectorAll("button")].find((b) => /Show my safe-to-spend/.test(b.textContent))?.disabled), "enabled"),
+  expect(
+    await fresh.evaluate(
+      () => [...document.querySelectorAll("button")].find((b) => /Show my safe-to-spend/.test(b.textContent))?.disabled,
+    ),
+    "enabled",
+  ),
 );
 await check("Letters are ignored in money fields", async () => {
   await typeInto(fresh, 'input[placeholder="48,000"]', "abc");
@@ -440,7 +505,10 @@ await check("3 answers → safe-to-spend appears", async () => {
 });
 await check("Full plan visible after quick start", async () => {
   const t = await text(fresh);
-  expect(/Your payment plan/.test(t) && /2026 quarterly deadlines/.test(t) && !/How much of your money/.test(t), "no plan");
+  expect(
+    /Your payment plan/.test(t) && /2026 quarterly deadlines/.test(t) && !/How much of your money/.test(t),
+    "no plan",
+  );
 });
 await check("Extreme income ($1,000,000) stays sane", async () => {
   await clickButton(fresh, /^Reset$/);
@@ -461,7 +529,11 @@ section = "Mobile 375px";
 const mobile = await (await browser.createBrowserContext()).newPage();
 watch(mobile, "mobile");
 await mobile.setViewport({ width: 375, height: 812, isMobile: true, hasTouch: true });
-for (const [name, path] of [["Landing", "/"], ["Demo", "/plan?demo=maya"], ["Quick start", "/plan"]]) {
+for (const [name, path] of [
+  ["Landing", "/"],
+  ["Demo", "/plan?demo=maya"],
+  ["Quick start", "/plan"],
+]) {
   await check(`${name}: no horizontal scroll`, async () => {
     await mobile.goto(BASE + path, { waitUntil: "networkidle0" });
     await sleep(300);
@@ -472,14 +544,20 @@ await check("Demo on phone: Safe to spend shown before the form", async () => {
   await mobile.goto(BASE + "/plan?demo=maya", { waitUntil: "networkidle0" });
   await sleep(300);
   const ok = await mobile.evaluate(() => {
-    const top = (re) => [...document.querySelectorAll("h2")].find((h) => re.test(h.textContent))?.getBoundingClientRect().top ?? 1e9;
+    const top = (re) =>
+      [...document.querySelectorAll("h2")].find((h) => re.test(h.textContent))?.getBoundingClientRect().top ?? 1e9;
     return top(/Safe to spend/i) < top(/About you/);
   });
   expect(ok, "form first");
 });
 await check("Main CTA is a comfortable tap target (≥ 44px)", async () => {
   await mobile.goto(BASE + "/", { waitUntil: "networkidle0" });
-  const h = await mobile.evaluate(() => [...document.querySelectorAll("a")].find((a) => /Show my safe-to-spend/.test(a.textContent))?.getBoundingClientRect().height);
+  const h = await mobile.evaluate(
+    () =>
+      [...document.querySelectorAll("a")]
+        .find((a) => /Show my safe-to-spend/.test(a.textContent))
+        ?.getBoundingClientRect().height,
+  );
   expect(h >= 44, `${h}px`);
 });
 
@@ -497,7 +575,11 @@ await check("Every input has a label", async () => {
   expect(bad.length === 0, bad.join(" | "));
 });
 await check("Every button has a name", async () => {
-  const bad = await page.evaluate(() => [...document.querySelectorAll("button")].filter((b) => !b.textContent.trim() && !b.getAttribute("aria-label")).length);
+  const bad = await page.evaluate(
+    () =>
+      [...document.querySelectorAll("button")].filter((b) => !b.textContent.trim() && !b.getAttribute("aria-label"))
+        .length,
+  );
   expect(bad === 0, `${bad} unnamed`);
 });
 await check("Progress bar exposes its value", async () =>
@@ -514,17 +596,26 @@ await check("Only our own domain was contacted (no trackers, no data leaves)", a
 await check("No hydration errors in a ru-RU browser", async () =>
   expect(!consoleErrors.some((e) => /#418|#423|#425|[Hh]ydration/.test(e)), consoleErrors.join(" | ").slice(0, 200)),
 );
-await check("No console errors at all", async () => expect(consoleErrors.length === 0, consoleErrors.join(" | ").slice(0, 200)));
+await check("No console errors at all", async () =>
+  expect(consoleErrors.length === 0, consoleErrors.join(" | ").slice(0, 200)),
+);
 
 const head = async (path) => fetch(BASE + path, { redirect: "manual" });
-await check("Unknown page returns 404", async () => expect((await head("/definitely-not-here")).status === 404, "not 404"));
+await check("Unknown page returns 404", async () =>
+  expect((await head("/definitely-not-here")).status === 404, "not 404"),
+);
 await check("Sample CSV served as text/csv with Chase header", async () => {
   const r = await head("/sample-chase-export.csv");
   const body = await r.text();
-  expect(r.status === 200 && /text\/csv/.test(r.headers.get("content-type")) && body.startsWith("Details,Posting Date"), "csv");
+  expect(
+    r.status === 200 && /text\/csv/.test(r.headers.get("content-type")) && body.startsWith("Details,Posting Date"),
+    "csv",
+  );
 });
 await check("Favicon served", async () => expect((await head("/favicon.ico")).status === 200, "no favicon"));
-await check("HTTPS with HSTS", async () => expect(!!(await head("/")).headers.get("strict-transport-security"), "no HSTS"));
+await check("HTTPS with HSTS", async () =>
+  expect(!!(await head("/")).headers.get("strict-transport-security"), "no HSTS"),
+);
 await check("/plan is prerendered static HTML", async () => {
   const html = await (await head("/plan")).text();
   expect(/Stash1099/.test(html) && /<html lang="en"/.test(html), "not prerendered");
@@ -534,8 +625,12 @@ await check("/plan is prerendered static HTML", async () => {
 section = "Repo & PDF";
 const gh = (p) => fetch(`https://api.github.com/repos/${REPO}${p}`, { headers: { "User-Agent": "stash1099-e2e" } });
 const repo = await (await gh("")).json();
-await check("Repo is public and not archived", async () => expect(repo.private === false && repo.archived === false, "private/archived"));
-await check("Repo homepage = live product", async () => expect(repo.homepage === "https://stash1099.vercel.app", repo.homepage));
+await check("Repo is public and not archived", async () =>
+  expect(repo.private === false && repo.archived === false, "private/archived"),
+);
+await check("Repo homepage = live product", async () =>
+  expect(repo.homepage === "https://stash1099.vercel.app", repo.homepage),
+);
 await check("README explains live link and how to run tests", async () => {
   const md = await (await fetch(`https://raw.githubusercontent.com/${REPO}/main/README.md`)).text();
   expect(md.includes("https://stash1099.vercel.app") && md.includes("npm test"), "readme");
@@ -543,13 +638,18 @@ await check("README explains live link and how to run tests", async () => {
 const tree = await (await gh(`/git/trees/main?recursive=1`)).json();
 const paths = (tree.tree ?? []).map((t) => t.path);
 await check("No secrets or env files committed", async () =>
-  expect(!paths.some((p) => /(^|\/)\.env|\.vercel\/|\.pem$|id_rsa/.test(p)), paths.filter((p) => /env|vercel/.test(p)).join(",")),
+  expect(
+    !paths.some((p) => /(^|\/)\.env|\.vercel\/|\.pem$|id_rsa/.test(p)),
+    paths.filter((p) => /env|vercel/.test(p)).join(","),
+  ),
 );
 await check("Unit tests are in the repo (≥ 4 test files)", async () =>
   expect(paths.filter((p) => /\.test\.ts$/.test(p)).length >= 4, "few tests"),
 );
 await check("Pitch PDF in repo, ≤ 10 slides", async () => {
-  const buf = Buffer.from(await (await fetch(`https://github.com/${REPO}/raw/main/docs/Stash1099-pitch.pdf`)).arrayBuffer());
+  const buf = Buffer.from(
+    await (await fetch(`https://github.com/${REPO}/raw/main/docs/Stash1099-pitch.pdf`)).arrayBuffer(),
+  );
   const pages = (buf.toString("latin1").match(/\/Type\s*\/Page[^s]/g) || []).length;
   expect(buf.subarray(0, 4).toString() === "%PDF" && pages >= 1 && pages <= 10, `${pages} pages`);
 });
