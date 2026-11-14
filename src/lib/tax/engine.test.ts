@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { TAX_2026 } from "./config2026";
-import { bracketTax, buildPlan, computeTax, mileageDeduction, simulatePenalty, splitPayment, type TaxInput } from "./engine";
+import {
+  bracketTax,
+  buildPlan,
+  computeTax,
+  mileageDeduction,
+  simulatePenalty,
+  splitPayment,
+  type TaxInput,
+} from "./engine";
 import { parsePayments } from "../parsePayments";
 import { MAYA_STATE } from "../state";
 

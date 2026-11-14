@@ -8,16 +8,10 @@ import { quotePayout } from "@/lib/quote";
 import { formatShort, todayLocal } from "@/lib/tax/dates";
 import { newId, parsePayments } from "@/lib/parsePayments";
 import { buildIcs } from "@/lib/ics";
-import { stashStatus, type StashStatus } from "@/lib/stash";
-import {
-  EMPTY_STATE,
-  MAYA_STATE,
-  decodeShare,
-  encodeShare,
-  loadLocal,
-  saveLocal,
-  type PlanState,
-} from "@/lib/state";
+import { safeToSpend, stashStatus, type StashStatus } from "@/lib/stash";
+import { importBankCsv, type Deposit, type ImportResult } from "@/lib/importCsv";
+import type { IncomePayment } from "@/lib/tax/engine";
+import { EMPTY_STATE, MAYA_STATE, decodeShare, encodeShare, loadLocal, saveLocal, type PlanState } from "@/lib/state";
 import { Card, MoneyField, Segmented, Stat, Step, pct, usd } from "./ui";
 
 const YEAR = TAX_2026.year;
@@ -89,13 +83,20 @@ export default function PlanApp() {
         {/* ------------------------------ INPUTS ------------------------------ */}
         <div className="min-w-0 space-y-4">
           {!hasIncome && (
-            <div className="rounded-2xl border border-dashed border-brand/40 bg-brand-soft p-4 text-sm">
-              <b>New here?</b> Add your 1099 payments below, or{" "}
-              <button className="font-semibold text-brand underline" onClick={() => setState(MAYA_STATE)}>
-                load Maya&apos;s example
-              </button>{" "}
-              to see a full plan in one click.
-            </div>
+            <QuickStart
+              filingStatus={state.filingStatus}
+              onDemo={() => setState(MAYA_STATE)}
+              onStart={(q) =>
+                setState((s) => ({
+                  ...s,
+                  filingStatus: q.filingStatus,
+                  checkingBalance: q.balance,
+                  payments: [
+                    { id: newId(), date: today, source: "Year-to-date total (quick start)", amount: q.earned },
+                  ],
+                }))
+              }
+            />
           )}
 
           <Step n={1} title="About you" hint={`Tax year ${YEAR}. Used for brackets and the standard deduction.`}>
@@ -136,7 +137,11 @@ export default function PlanApp() {
               <details className="group rounded-xl bg-surface-2 p-3 text-sm">
                 <summary className="cursor-pointer font-medium">Also have a W-2 job?</summary>
                 <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                  <MoneyField label="W-2 wages this year" value={state.w2Wages} onChange={(v) => set("w2Wages", v ?? 0)} />
+                  <MoneyField
+                    label="W-2 wages this year"
+                    value={state.w2Wages}
+                    onChange={(v) => set("w2Wages", v ?? 0)}
+                  />
                   <MoneyField
                     label="Federal tax withheld"
                     value={state.w2Withholding}
@@ -233,7 +238,19 @@ export default function PlanApp() {
         </div>
 
         {/* ------------------------------ RESULTS ----------------------------- */}
-        <div className={`min-w-0 space-y-4 lg:sticky lg:top-4 lg:self-start ${hasIncome ? "order-first lg:order-none" : ""}`}>
+        <div
+          className={`min-w-0 space-y-4 lg:sticky lg:top-4 lg:self-start ${hasIncome ? "order-first lg:order-none" : ""}`}
+        >
+          {hasIncome && (
+            <SafeCard
+              balance={state.checkingBalance}
+              onBalance={(v) => set("checkingBalance", v)}
+              stash={stash}
+              plan={plan}
+              w2Withholding={state.w2Withholding}
+            />
+          )}
+
           <JustGotPaid
             quote={(amount) => quotePayout(state, amount, today)}
             onAdd={(amount, source) => {
@@ -250,44 +267,61 @@ export default function PlanApp() {
 
           {hasIncome && <StashCard stash={stash} />}
 
-          <div className="grid grid-cols-2 gap-3">
-            <Stat
-              label="Set aside from new payouts"
-              value={hasIncome ? pct(nextRate, 0) : "—"}
-              sub={
-                hasIncome
-                  ? `${pct(plan.setAsideRate, 0)} average for ${YEAR} · federal + SE${state.stateRate ? " + state" : ""}`
-                  : "add income to calculate"
-              }
-              tone="brand"
-            />
-            <Stat
-              label="Next IRS deadline"
-              value={plan.nextDueDate ? `${plan.daysToNextDue} days` : "—"}
-              sub={plan.nextDueDate ? formatShort(plan.nextDueDate) : "All 2026 deadlines passed"}
-            />
-            <Stat
-              label="Penalty so far"
-              value={usd(plan.penaltyAccruedToDate, true)}
-              sub={plan.dailyPenaltyNow > 0 ? `+${usd(plan.dailyPenaltyNow, true)} every day you wait` : "You're on track"}
-              tone={plan.penaltyAccruedToDate > 0 ? "danger" : "default"}
-            />
-            <Stat
-              label="Penalty by Apr 15 if you do nothing"
-              value={usd(plan.penaltyIfNoMorePayments, true)}
-              sub={`vs ${usd(plan.penaltyIfFollowPlan, true)} if you follow the plan`}
-              tone={plan.penaltyIfNoMorePayments > 0 ? "warn" : "default"}
-            />
-          </div>
+          {hasIncome ? (
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <Stat
+                  label="Set aside from new payouts"
+                  value={hasIncome ? pct(nextRate, 0) : "—"}
+                  sub={
+                    hasIncome
+                      ? `${pct(plan.setAsideRate, 0)} average for ${YEAR} · federal + SE${state.stateRate ? " + state" : ""}`
+                      : "add income to calculate"
+                  }
+                  tone="brand"
+                />
+                <Stat
+                  label="Next IRS deadline"
+                  value={plan.nextDueDate ? `${plan.daysToNextDue} days` : "—"}
+                  sub={plan.nextDueDate ? formatShort(plan.nextDueDate) : "All 2026 deadlines passed"}
+                />
+                <Stat
+                  label="Penalty so far"
+                  value={usd(plan.penaltyAccruedToDate, true)}
+                  sub={
+                    plan.dailyPenaltyNow > 0
+                      ? `+${usd(plan.dailyPenaltyNow, true)} every day you wait`
+                      : "You're on track"
+                  }
+                  tone={plan.penaltyAccruedToDate > 0 ? "danger" : "default"}
+                />
+                <Stat
+                  label="Penalty by Apr 15 if you do nothing"
+                  value={usd(plan.penaltyIfNoMorePayments, true)}
+                  sub={`vs ${usd(plan.penaltyIfFollowPlan, true)} if you follow the plan`}
+                  tone={plan.penaltyIfNoMorePayments > 0 ? "warn" : "default"}
+                />
+              </div>
 
-          <ActionPlan plan={plan} today={today} />
-          <Schedule plan={plan} />
-          <Breakdown plan={plan} />
+              <ActionPlan plan={plan} today={today} />
+              <Schedule plan={plan} />
+              <Breakdown plan={plan} />
+            </>
+          ) : (
+            <Card className="text-center">
+              <div className="text-4xl">🧾</div>
+              <h2 className="mt-2 font-semibold">Your plan shows up here</h2>
+              <p className="mt-1 text-sm text-muted">
+                Safe-to-spend, the IRS minimum for each deadline, your penalty so far and a calendar with exact amounts.
+              </p>
+            </Card>
+          )}
 
           <p className="px-1 text-xs leading-relaxed text-muted">
-            Estimates for tax year {YEAR} using IRS Rev. Proc. 2025-32, the {TAX_2026.se.socialSecurityWageBase.toLocaleString()}{" "}
-            Social Security wage base, Form 2210 regular-method penalty math and IRS quarterly interest rates. Not tax
-            advice. Everything is computed in your browser; nothing is sent to a server.
+            Estimates for tax year {YEAR} using IRS Rev. Proc. 2025-32, the{" "}
+            {TAX_2026.se.socialSecurityWageBase.toLocaleString()} Social Security wage base, Form 2210 regular-method
+            penalty math and IRS quarterly interest rates. Not tax advice. Everything is computed in your browser;
+            nothing is sent to a server.
           </p>
         </div>
       </main>
@@ -405,12 +439,78 @@ function JustGotPaid({
             {last.moved ? `✓ ${usd(last.stash)} logged in your tax stash` : `I moved ${usd(last.stash)} to tax savings`}
           </button>
           <p className="col-span-2 text-xs text-muted">
-            That is {pct(last.stash / last.amount, 0)} of this payout: the exact extra {YEAR} tax it creates (SE tax + your
-            bracket, after deductions). New dollars usually cost more than your yearly average once the standard deduction
-            is used up.
+            That is {pct(last.stash / last.amount, 0)} of this payout: the exact extra {YEAR} tax it creates (SE tax +
+            your bracket, after deductions). New dollars usually cost more than your yearly average once the standard
+            deduction is used up.
           </p>
         </div>
       )}
+    </Card>
+  );
+}
+
+function SafeCard({
+  balance,
+  onBalance,
+  stash,
+  plan,
+  w2Withholding,
+}: {
+  balance: number | null;
+  onBalance: (v: number | null) => void;
+  stash: StashStatus;
+  plan: Plan;
+  w2Withholding: number;
+}) {
+  const s = safeToSpend(balance ?? 0, stash, plan, w2Withholding);
+  const negative = balance != null && s.safe < 0;
+  return (
+    <Card className="border-ink/10">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">Safe to spend</h2>
+          {balance == null ? (
+            <p className="mt-1 text-sm text-muted">
+              Type what is in your checking account. We show how much of it is yours.
+            </p>
+          ) : (
+            <div className={`tnum mt-1 text-4xl font-bold ${negative ? "text-danger" : "text-brand"}`}>
+              {usd(s.safe)}
+            </div>
+          )}
+        </div>
+        <div className="w-44">
+          <MoneyField label="Checking balance now" value={balance} nullable onChange={onBalance} placeholder="4,200" />
+        </div>
+      </div>
+      {balance != null && (
+        <p className="mt-2 text-sm">
+          {negative ? (
+            <>
+              You have already spent <b className="text-danger">{usd(-s.safe)}</b> of the IRS&apos;s money.{" "}
+            </>
+          ) : null}
+          <span className="text-muted">
+            {usd(s.unstashedTax)} of your balance is tax on money you earned this year and have not set aside.
+          </span>
+        </p>
+      )}
+      <div className="mt-4 grid grid-cols-3 gap-2 rounded-xl bg-surface-2 p-3 text-center text-xs">
+        <div>
+          <div className="text-muted">Still owed for {YEAR}</div>
+          <div className="tnum text-base font-semibold">{usd(s.stillOwedForYear)}</div>
+        </div>
+        <div>
+          <div className="text-muted">In tax savings</div>
+          <div className="tnum text-base font-semibold">{usd(stash.balance)}</div>
+        </div>
+        <div>
+          <div className="text-muted">April 15 shortfall</div>
+          <div className={`tnum text-base font-semibold ${s.aprilShortfall > 0 ? "text-danger" : "text-brand"}`}>
+            {usd(s.aprilShortfall)}
+          </div>
+        </div>
+      </div>
     </Card>
   );
 }
@@ -447,7 +547,9 @@ function StashCard({ stash }: { stash: StashStatus }) {
         <span>
           <b>{usd(stash.covered)}</b> covered ({Math.round(stash.progress * 100)}%)
         </span>
-        <span className="text-muted">{usd(stash.targetForYear)} needed for {YEAR}</span>
+        <span className="text-muted">
+          {usd(stash.targetForYear)} needed for {YEAR}
+        </span>
       </div>
       <div className="mt-4 grid grid-cols-3 gap-2 text-center text-xs">
         <div className="rounded-xl bg-surface-2 p-2">
@@ -465,8 +567,8 @@ function StashCard({ stash }: { stash: StashStatus }) {
       </div>
       {behind && (
         <p className="mt-3 text-sm text-muted">
-          Move <b className="text-ink">{usd(-stash.gap)}</b> to tax savings to catch up, then stash your % from every new
-          payout. IRS payments are assumed to come out of the stash.
+          Move <b className="text-ink">{usd(-stash.gap)}</b> to tax savings to catch up, then stash your % from every
+          new payout. IRS payments are assumed to come out of the stash.
         </p>
       )}
     </Card>
@@ -542,11 +644,13 @@ function ActionPlan({ plan, today }: { plan: Plan; today: string }) {
           {mode === "safe" ? (
             <>
               Safe harbor = <b className="text-ink">{basis}</b> ({usd(plan.requiredAnnualPayment)}). Pay this and the
-              penalty stops. You&apos;ll still owe about <b className="text-ink">{usd(plan.aprilBalanceSafe)}</b> in April
-              — penalty-free, so keep it in savings until then.
+              penalty stops. You&apos;ll still owe about <b className="text-ink">{usd(plan.aprilBalanceSafe)}</b> in
+              April — penalty-free, so keep it in savings until then.
             </>
           ) : (
-            <>Covers your full projected federal tax so April is $0. Costs more cash now, same penalty as the minimum.</>
+            <>
+              Covers your full projected federal tax so April is $0. Costs more cash now, same penalty as the minimum.
+            </>
           )}
         </p>
       )}
@@ -611,7 +715,11 @@ function Schedule({ plan }: { plan: Plan }) {
 function Breakdown({ plan }: { plan: Plan }) {
   const b = plan.breakdown;
   const rows: [string, number, string?][] = [
-    ["1099 income (received + projected)", b.grossSelfEmployment, b.projectedRestOfYear > 0 ? `incl. ${usd(b.projectedRestOfYear)} projected` : undefined],
+    [
+      "1099 income (received + projected)",
+      b.grossSelfEmployment,
+      b.projectedRestOfYear > 0 ? `incl. ${usd(b.projectedRestOfYear)} projected` : undefined,
+    ],
     ["− Mileage deduction", -b.mileageDeduction],
     ["= Net profit (Schedule C)", b.netProfit],
     ["Self-employment tax (15.3%)", b.seTax],
@@ -629,7 +737,9 @@ function Breakdown({ plan }: { plan: Plan }) {
       <details>
         <summary className="flex cursor-pointer items-center justify-between font-semibold">
           <span>How we got here</span>
-          <span className="tnum text-base">Total {YEAR} tax: {usd(b.totalTax)}</span>
+          <span className="tnum text-base">
+            Total {YEAR} tax: {usd(b.totalTax)}
+          </span>
         </summary>
         <table className="mt-4 w-full text-sm">
           <tbody>
@@ -686,7 +796,10 @@ function IncomeLog({
           if (!draft.amount) return;
           setState((s) => ({
             ...s,
-            payments: [...s.payments, { id: newId(), date: draft.date, source: draft.source || "Client", amount: draft.amount! }],
+            payments: [
+              ...s.payments,
+              { id: newId(), date: draft.date, source: draft.source || "Client", amount: draft.amount! },
+            ],
           }));
           setDraft({ date: draft.date, source: "", amount: null });
         }}
@@ -721,8 +834,21 @@ function IncomeLog({
         <button className="rounded-xl bg-ink px-4 py-2.5 text-sm font-semibold text-bg">Add</button>
       </form>
 
+      <BankImport
+        existing={state.payments}
+        onImport={(rows) =>
+          setState((s) => ({
+            ...s,
+            payments: [
+              ...s.payments,
+              ...rows.map((r) => ({ id: newId(), date: r.date, source: r.source, amount: r.amount })),
+            ],
+          }))
+        }
+      />
+
       <button className="text-sm font-medium text-brand" onClick={() => setShowPaste((v) => !v)}>
-        {showPaste ? "Hide" : "📋 Paste many at once"} {showPaste ? "" : "(from bank app, payout emails, notes)"}
+        {showPaste ? "Hide" : "📋 Paste lines"} {showPaste ? "" : "(payout emails, notes)"}
       </button>
       {showPaste && (
         <div className="space-y-2">
@@ -871,5 +997,181 @@ function AmountLog({
         </ul>
       )}
     </div>
+  );
+}
+
+/* --------------------------- Bank CSV import --------------------------- */
+
+function BankImport({ existing, onImport }: { existing: IncomePayment[]; onImport: (rows: Deposit[]) => void }) {
+  const [result, setResult] = useState<ImportResult | null>(null);
+  const [rows, setRows] = useState<Deposit[]>([]);
+  const [done, setDone] = useState<string | null>(null);
+
+  const load = (text: string) => {
+    const r = importBankCsv(text, YEAR);
+    // Mark deposits already in the log (same date + amount) so re-importing never doubles income.
+    const seen = new Set(existing.map((p) => `${p.date}|${Math.round(p.amount * 100)}`));
+    const deposits = r.deposits.map((d) =>
+      seen.has(`${d.date}|${Math.round(d.amount * 100)}`)
+        ? { ...d, include: false, kind: "excluded" as const, reason: "Already in your income log" }
+        : d,
+    );
+    setResult(r);
+    setRows(deposits);
+    setDone(null);
+  };
+
+  const picked = rows.filter((r) => r.include);
+  const total = picked.reduce((s, r) => s + r.amount, 0);
+  const tone = { platform: "text-brand", maybe: "text-warn", excluded: "text-muted" } as const;
+
+  return (
+    <div className="rounded-xl border border-dashed border-line p-3">
+      <div className="flex flex-wrap items-center gap-2 text-sm">
+        <label className="cursor-pointer rounded-lg bg-brand px-3 py-2 font-semibold text-brand-ink">
+          🏦 Import bank CSV
+          <input
+            type="file"
+            accept=".csv,text/csv"
+            className="hidden"
+            onChange={async (e) => {
+              const f = e.target.files?.[0];
+              if (f) load(await f.text());
+              e.target.value = "";
+            }}
+          />
+        </label>
+        <button
+          type="button"
+          className="rounded-lg px-2 py-2 font-medium text-brand underline"
+          onClick={async () => load(await (await fetch("/sample-chase-export.csv")).text())}
+        >
+          try a sample Chase export
+        </button>
+        <span className="text-xs text-muted">
+          Chase, BofA, Wells, Capital One… Read in your browser, never uploaded.
+        </span>
+      </div>
+
+      {done && <p className="mt-2 text-sm font-medium text-brand">{done}</p>}
+      {result?.error && <p className="mt-2 text-sm text-danger">{result.error}</p>}
+
+      {result && !result.error && rows.length > 0 && !done && (
+        <div className="mt-3 space-y-2">
+          <p className="text-xs text-muted">
+            {result.bankFormat}: {rows.length} deposits found, {result.skippedOutflows} spending rows ignored. Ticked
+            rows look like 1099 income; check any client payments we could not be sure about.
+          </p>
+          <ul className="max-h-64 divide-y divide-line overflow-auto rounded-lg border border-line text-sm">
+            {rows.map((r, i) => (
+              <li key={`${r.date}-${i}`} className="flex items-center gap-2 px-2 py-1.5">
+                <input
+                  type="checkbox"
+                  aria-label={`Include ${r.description}`}
+                  className="h-4 w-4 accent-[var(--brand)]"
+                  checked={r.include}
+                  disabled={r.reason === "Already in your income log"}
+                  onChange={(e) => setRows(rows.map((x, j) => (j === i ? { ...x, include: e.target.checked } : x)))}
+                />
+                <span className="w-14 shrink-0 text-xs text-muted">{formatShort(r.date).replace(/, \d{4}$/, "")}</span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate">{r.source}</span>
+                  <span className={`block truncate text-xs ${tone[r.kind]}`}>{r.reason}</span>
+                </span>
+                <span className="tnum font-medium">{usd(r.amount, true)}</span>
+              </li>
+            ))}
+          </ul>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              disabled={picked.length === 0}
+              className="rounded-lg bg-ink px-3 py-2 text-sm font-semibold text-bg disabled:opacity-40"
+              onClick={() => {
+                onImport(picked);
+                setDone(`Added ${picked.length} payouts (${usd(total)}) to your income log.`);
+              }}
+            >
+              Add {picked.length} payouts · {usd(total)}
+            </button>
+            <button type="button" className="text-sm text-muted" onClick={() => setResult(null)}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ------------------------------ Quick start ----------------------------- */
+
+function QuickStart({
+  filingStatus,
+  onStart,
+  onDemo,
+}: {
+  filingStatus: FilingStatus;
+  onStart: (q: { earned: number; balance: number | null; filingStatus: FilingStatus }) => void;
+  onDemo: () => void;
+}) {
+  const [earned, setEarned] = useState<number | null>(null);
+  const [balance, setBalance] = useState<number | null>(null);
+  const [fs, setFs] = useState<FilingStatus>(filingStatus);
+  return (
+    <Card className="border-brand/40 bg-gradient-to-br from-brand-soft to-surface">
+      <h2 className="text-lg font-semibold">How much of your money is actually yours?</h2>
+      <p className="mt-1 text-sm text-muted">Three questions, 20 seconds. Add details later for an exact plan.</p>
+      <form
+        className="mt-4 space-y-3"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (earned && earned > 0) onStart({ earned, balance, filingStatus: fs });
+        }}
+      >
+        <div className="grid gap-3 sm:grid-cols-2">
+          <MoneyField
+            label={`1. 1099 income so far in ${YEAR}`}
+            value={earned}
+            nullable
+            onChange={setEarned}
+            placeholder="48,000"
+            hint="All clients and gig apps, before expenses"
+          />
+          <MoneyField
+            label="2. In your checking account now"
+            value={balance}
+            nullable
+            onChange={setBalance}
+            placeholder="4,200"
+            hint="Optional. Stays in your browser"
+          />
+        </div>
+        <div>
+          <span className="text-sm font-medium">3. You file as</span>
+          <div className="mt-1">
+            <Segmented<FilingStatus>
+              value={fs}
+              onChange={setFs}
+              options={(Object.keys(FILING_STATUS_LABEL) as FilingStatus[]).map((k) => ({
+                value: k,
+                label: FILING_STATUS_LABEL[k],
+              }))}
+            />
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            disabled={!earned}
+            className="rounded-xl bg-brand px-5 py-3 font-semibold text-brand-ink disabled:opacity-40"
+          >
+            Show my safe-to-spend
+          </button>
+          <button type="button" onClick={onDemo} className="text-sm font-medium text-brand underline">
+            or see Maya&apos;s example
+          </button>
+        </div>
+      </form>
+    </Card>
   );
 }

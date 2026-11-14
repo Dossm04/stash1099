@@ -19,7 +19,10 @@ export function buildIcs(
   appUrl: string,
   weekly?: { from: string; until: string; rate: number },
 ): string {
-  const stamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+  const stamp = new Date()
+    .toISOString()
+    .replace(/[-:]/g, "")
+    .replace(/\.\d{3}/, "");
   const lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Stash1099//EN", "CALSCALE:GREGORIAN"];
   for (const it of items) {
     const d = compact(it.dueDate);

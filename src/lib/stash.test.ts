@@ -18,7 +18,13 @@ describe("stashStatus", () => {
   });
 
   it("is on track once enough is stashed, and IRS payments come out of the stash", () => {
-    const s = stashStatus([pay("2026-02-01", 10_000)], [dep("2026-02-02", 2_500)], [dep("2026-04-15", 1_000)], plan, "2026-11-14");
+    const s = stashStatus(
+      [pay("2026-02-01", 10_000)],
+      [dep("2026-02-02", 2_500)],
+      [dep("2026-04-15", 1_000)],
+      plan,
+      "2026-11-14",
+    );
     expect(s.status).toBe("on-track");
     expect(s.covered).toBe(2_500);
     expect(s.balance).toBe(1_500);
@@ -66,7 +72,13 @@ describe("share link", () => {
 
   it("rejects garbage and clamps hostile values", () => {
     expect(decodeShare("not-base64!!")).toBeNull();
-    const s = sanitize({ stateRate: 9, payments: [{ date: "bad", amount: 5 }, { date: "2026-01-01", amount: -3 }] });
+    const s = sanitize({
+      stateRate: 9,
+      payments: [
+        { date: "bad", amount: 5 },
+        { date: "2026-01-01", amount: -3 },
+      ],
+    });
     expect(s?.stateRate).toBe(0.15);
     expect(s?.payments).toEqual([]);
     expect(s?.stashDeposits).toEqual([]);
@@ -93,12 +105,38 @@ describe("quotePayout", () => {
 
   it("quotes the marginal rate: SE tax only while income is under the standard deduction", async () => {
     const { quotePayout } = await import("./quote");
-    const low = { ...MAYA_STATE, payments: [pay("2026-01-20", 500)], expectedRestOfYear: 0, qualifiedTips: 0, businessMiles: 0, businessExpenses: 0 };
+    const low = {
+      ...MAYA_STATE,
+      payments: [pay("2026-01-20", 500)],
+      expectedRestOfYear: 0,
+      qualifiedTips: 0,
+      businessMiles: 0,
+      businessExpenses: 0,
+    };
     // 92.35% × 15.3% = 14.13%
     expect(quotePayout(low, 1000, "2026-02-10").stash).toBe(141);
     // Maya in November: SE tax + 12% bracket net of QBI ≈ 22%, above her 17% average.
     const q = quotePayout(MAYA_STATE, 1200, today);
     expect(q.stash / 1200).toBeGreaterThan(0.2);
     expect(q.stash / 1200).toBeLessThan(0.25);
+  });
+});
+
+describe("safeToSpend", () => {
+  it("subtracts tax earned-but-not-stashed from the checking balance", async () => {
+    const { safeToSpend } = await import("./stash");
+    const s = stashStatus([pay("2026-02-01", 10_000)], [dep("2026-02-02", 500)], [], plan, "2026-11-14");
+    // target 2,000, covered 500 → 1,500 of the balance belongs to the IRS
+    const res = safeToSpend(4_000, s, { breakdown: { totalTax: 9_000 } } as never, 0);
+    expect(res.unstashedTax).toBe(1_500);
+    expect(res.safe).toBe(2_500);
+    expect(res.stillOwedForYear).toBe(9_000);
+    expect(res.aprilShortfall).toBe(8_500);
+  });
+
+  it("goes negative when tax money was already spent", async () => {
+    const { safeToSpend } = await import("./stash");
+    const s = stashStatus([pay("2026-02-01", 10_000)], [], [], plan, "2026-11-14");
+    expect(safeToSpend(1_200, s, { breakdown: { totalTax: 2_500 } } as never, 0).safe).toBe(-800);
   });
 });

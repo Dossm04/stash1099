@@ -5,6 +5,8 @@ import type { StashDeposit } from "./stash";
 export type PlanState = Omit<TaxInput, "asOf"> & {
   /** Transfers the user made into a separate tax savings account. */
   stashDeposits: StashDeposit[];
+  /** What is in the checking account right now (optional, never leaves the browser). */
+  checkingBalance: number | null;
 };
 
 export const EMPTY_STATE: PlanState = {
@@ -21,6 +23,7 @@ export const EMPTY_STATE: PlanState = {
   priorYearAgiOver150k: false,
   estimatedPayments: [],
   stashDeposits: [],
+  checkingBalance: null,
 };
 
 /** Demo persona: Maya, 31, Austin TX — freelance UX designer who also delivers for DoorDash. */
@@ -54,6 +57,7 @@ export const MAYA_STATE: PlanState = {
     { id: "s2", date: "2026-02-21", amount: 1000 },
     { id: "s3", date: "2026-05-16", amount: 1200 },
   ],
+  checkingBalance: 4200,
 };
 
 const STORAGE_KEY = "stash1099:v1";
@@ -108,7 +112,12 @@ export function sanitize(raw: unknown): PlanState | null {
     filingStatus: fs,
     payments: list(r.payments)
       .filter((p) => p && isDate(p.date) && num(p.amount) > 0)
-      .map((p, i) => ({ id: str(p.id, `p${i}`), date: p.date, source: str(p.source, "Client"), amount: num(p.amount) })),
+      .map((p, i) => ({
+        id: str(p.id, `p${i}`),
+        date: p.date,
+        source: str(p.source, "Client"),
+        amount: num(p.amount),
+      })),
     expectedRestOfYear: r.expectedRestOfYear == null ? null : num(r.expectedRestOfYear),
     businessExpenses: num(r.businessExpenses),
     businessMiles: num(r.businessMiles),
@@ -121,6 +130,7 @@ export function sanitize(raw: unknown): PlanState | null {
     estimatedPayments: list(r.estimatedPayments)
       .filter((p) => p && isDate(p.date) && num(p.amount) > 0)
       .map((p, i) => ({ id: str(p.id, `e${i}`), date: p.date, amount: num(p.amount) })),
+    checkingBalance: r.checkingBalance == null ? null : num(r.checkingBalance),
     stashDeposits: list(r.stashDeposits)
       .filter((p) => p && isDate(p.date) && num(p.amount) > 0)
       .map((p, i) => ({ id: str(p.id, `s${i}`), date: p.date, amount: num(p.amount) })),

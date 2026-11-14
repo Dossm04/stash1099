@@ -34,7 +34,10 @@ export function parsePayments(text: string, year: number): ParseResult {
       return;
     }
     const amount = Number(amountMatch[1].replace(/,/g, ""));
-    let rest = line.slice(0, amountMatch.index).replace(/[,;|]+\s*$/, "").trim();
+    let rest = line
+      .slice(0, amountMatch.index)
+      .replace(/[,;|]+\s*$/, "")
+      .trim();
 
     let date: string | null = null;
     let m: RegExpMatchArray | null;

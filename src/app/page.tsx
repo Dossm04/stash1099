@@ -48,7 +48,10 @@ const DIFF = [
     "Live penalty counter",
     "See what you’ve already accrued and what it will be by April, computed day by day like IRS Form 2210.",
   ],
-  ["Uneven income friendly", "Built for gig and freelance paychecks: each payout updates your set-aside rate instantly."],
+  [
+    "Uneven income friendly",
+    "Built for gig and freelance paychecks: each payout updates your set-aside rate instantly.",
+  ],
   [
     "Private by design",
     "All math runs in your browser. Your plan is saved locally or in a private link, never on our servers.",
@@ -79,9 +82,9 @@ export default function Home() {
             Know exactly how much of every paycheck belongs to the IRS.
           </h1>
           <p className="mt-5 max-w-xl text-lg text-muted">
-            No employer withholds your taxes, so April brings a bill, plus a penalty for not paying quarterly.
-            Stash1099 tells you what to set aside from each payment and the minimum to pay by each deadline so the
-            penalty is zero.
+            No employer withholds your taxes, so April brings a bill, plus a penalty for not paying quarterly. Stash1099
+            tells you what to set aside from each payment and the minimum to pay by each deadline so the penalty is
+            zero.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             <Link
@@ -181,7 +184,9 @@ export default function Home() {
               <li>✓ Annualized-income method for very lumpy years</li>
               <li>✓ One-click export for your CPA</li>
             </ul>
-            <p className="mt-4 text-sm text-muted">Avoiding one average IRS penalty (~$766) pays for 13 years of Pro.</p>
+            <p className="mt-4 text-sm text-muted">
+              Avoiding one average IRS penalty (~$766) pays for 13 years of Pro.
+            </p>
           </div>
         </div>
         <div className="mt-10 text-center">
@@ -192,8 +197,7 @@ export default function Home() {
       </section>
 
       <footer className="border-t border-line py-8 text-center text-xs text-muted">
-        Stash1099 gives estimates using published IRS rules for tax year 2026. It is not tax, legal or financial
-        advice.
+        Stash1099 gives estimates using published IRS rules for tax year 2026. It is not tax, legal or financial advice.
       </footer>
     </div>
   );

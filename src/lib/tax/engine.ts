@@ -121,7 +121,7 @@ export function mileageDeduction(miles: number, cfg: TaxYearConfig = TAX_2026): 
   // Miles are entered for the whole year; spread them evenly across the rate periods by day count.
   const periods = cfg.mileage.periods;
   const totalDays = sum(periods.map((p) => daysBetween(p.from, p.to) + 1));
-  return sum(periods.map((p) => (miles * (daysBetween(p.from, p.to) + 1)) / totalDays * (p.centsPerMile / 100)));
+  return sum(periods.map((p) => ((miles * (daysBetween(p.from, p.to) + 1)) / totalDays) * (p.centsPerMile / 100)));
 }
 
 /** Project the remaining year's 1099 income from the pace so far. */

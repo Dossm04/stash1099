@@ -16,17 +16,7 @@ export function Card({ children, className = "" }: { children: ReactNode; classN
   return <div className={`rounded-2xl border border-line bg-surface p-5 ${className}`}>{children}</div>;
 }
 
-export function Step({
-  n,
-  title,
-  hint,
-  children,
-}: {
-  n: number;
-  title: string;
-  hint?: string;
-  children: ReactNode;
-}) {
+export function Step({ n, title, hint, children }: { n: number; title: string; hint?: string; children: ReactNode }) {
   return (
     <Card>
       <div className="mb-4 flex items-start gap-3">

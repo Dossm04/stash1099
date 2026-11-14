@@ -62,3 +62,35 @@ export function stashStatus(
     status: received === 0 ? "empty" : gap >= -1 ? "on-track" : "behind",
   };
 }
+
+export interface SafeToSpend {
+  /** Tax on income already received that is NOT yet set aside or paid. */
+  unstashedTax: number;
+  /** checking balance − unstashed tax (negative = you've already spent tax money). */
+  safe: number;
+  /** Tax still to pay for the year (federal + state − withholding − already paid to IRS). */
+  stillOwedForYear: number;
+  /** What the April bill would be short by, given what sits in tax savings. */
+  aprilShortfall: number;
+}
+
+/**
+ * The number a freelancer actually needs every time they look at their bank app:
+ * how much of this balance is really theirs. Checking balance minus the tax already
+ * earned-but-not-stashed. The rest of the year's tax shows up as the April bill.
+ */
+export function safeToSpend(
+  checkingBalance: number,
+  stash: StashStatus,
+  plan: Pick<PlanResult, "breakdown">,
+  w2Withholding: number,
+): SafeToSpend {
+  const unstashedTax = Math.max(0, -stash.gap);
+  const stillOwedForYear = Math.max(0, plan.breakdown.totalTax - w2Withholding - stash.paidToIrs);
+  return {
+    unstashedTax: r(unstashedTax),
+    safe: r(checkingBalance - unstashedTax),
+    stillOwedForYear: r(stillOwedForYear),
+    aprilShortfall: r(Math.max(0, stillOwedForYear - stash.balance)),
+  };
+}
