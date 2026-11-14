@@ -8,19 +8,22 @@ const STATS = [
     src: "MBO Partners, State of Independence 2026",
   },
   {
-    big: "15.7M",
-    text: "estimated-tax underpayment penalties in FY2025: $12.1B, ~$766 on average. Only 1.4% were forgiven.",
-    src: "IRS Data Book 2025, Table 4-2",
+    big: "3.16M",
+    text: "new IRS payment plans in FY2025 for tax bills that could not be paid at once: $17.9B paid through them.",
+    src: "IRS Data Book 2025, Table 4-1",
   },
   {
-    big: "49%",
-    text: "of independent workers don’t pay quarterly at all, and 63% fear owing more than they expect.",
-    src: "Independent Economy Council survey, n=1,000 (2022)",
+    big: "1 in 5",
+    text: "side hustlers set aside nothing for taxes or do not know what they owe. Only 43% save and pay at filing.",
+    src: "The Penny Hoarder / Pollfish, n=1,000, Feb 2026",
   },
 ];
 
 const STEPS = [
-  ["Log what you earned", "Type or paste payouts from Upwork, Uber, DoorDash or clients. No bank login, no signup."],
+  [
+    "Drop in your bank CSV",
+    "We spot payouts from Uber, DoorDash, Upwork, Stripe and more, and skip transfers and refunds. No bank login, no signup.",
+  ],
   [
     "Get your number",
     "We run the real 2026 IRS math (SE tax, brackets, QBI, the new no-tax-on-tips deduction) and project your year.",
@@ -32,6 +35,10 @@ const STEPS = [
 ];
 
 const DIFF = [
+  [
+    "Safe to spend, computed, not guessed",
+    "Your balance minus the tax you have already earned but not set aside, from real 2026 IRS math, not a flat rate you type in.",
+  ],
   [
     "Your real rate, not “save 30%”",
     "Each payout is quoted at the exact tax it adds: SE tax plus your bracket, after the standard deduction, QBI and tips. Early in the year that can be 14%; later, 22%+.",
@@ -79,19 +86,19 @@ export default function Home() {
             For US freelancers & gig workers
           </p>
           <h1 className="text-4xl font-bold leading-tight tracking-tight sm:text-5xl">
-            Know exactly how much of every paycheck belongs to the IRS.
+            Part of your bank balance belongs to the IRS. See how much is actually yours.
           </h1>
           <p className="mt-5 max-w-xl text-lg text-muted">
-            No employer withholds your taxes, so April brings a bill, plus a penalty for not paying quarterly. Stash1099
-            tells you what to set aside from each payment and the minimum to pay by each deadline so the penalty is
-            zero.
+            No employer withholds a freelancer&apos;s taxes, so the money in checking looks bigger than it is, until
+            April sends a bill for thousands. Stash1099 shows what is safe to spend right now, what to set aside from
+            each payout, and the least you must pay by each IRS deadline.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             <Link
               href="/plan"
               className="rounded-xl bg-brand px-6 py-3.5 font-semibold text-brand-ink shadow-sm hover:opacity-95"
             >
-              Build my plan in 60 seconds
+              Show my safe-to-spend
             </Link>
             <Link
               href="/plan?demo=maya"
@@ -105,8 +112,17 @@ export default function Home() {
         <div className="space-y-3">
           <Countdown />
           <div className="rounded-2xl border border-line bg-surface p-5 shadow-sm">
-            <div className="text-sm text-muted">Maya, a freelance designer, just got paid $1,200</div>
-            <div className="mt-3 grid grid-cols-2 gap-2 text-center">
+            <div className="text-sm text-muted">Maya, freelance designer, has $4,200 in checking</div>
+            <div className="mt-1 flex items-baseline gap-2">
+              <span className="tnum text-4xl font-bold text-danger">-$1,483</span>
+              <span className="text-sm text-muted">safe to spend</span>
+            </div>
+            <p className="mt-1 text-sm text-muted">
+              She has already spent $1,483 of the IRS&apos;s money. Her April bill: <b className="text-ink">$7,935</b>,
+              with $1,000 saved.
+            </p>
+            <div className="mt-3 text-sm text-muted">Then a client pays her $1,200:</div>
+            <div className="mt-2 grid grid-cols-2 gap-2 text-center">
               <div className="rounded-xl bg-surface-2 p-3">
                 <div className="text-xs text-muted">Hers to spend</div>
                 <div className="tnum text-2xl font-bold">$933</div>
@@ -115,9 +131,6 @@ export default function Home() {
                 <div className="text-xs opacity-80">Tax savings</div>
                 <div className="tnum text-2xl font-bold">$267</div>
               </div>
-            </div>
-            <div className="mt-3 rounded-xl bg-danger-soft p-3 text-sm text-danger">
-              She missed 2 quarterly payments: <b>~$50 penalty already</b>, $153 by April if she does nothing.
             </div>
           </div>
         </div>
