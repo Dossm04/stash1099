@@ -1,102 +1,191 @@
-import Image from "next/image";
+import Link from "next/link";
+import Countdown from "@/components/Countdown";
+
+const STATS = [
+  {
+    big: "72.9M",
+    text: "Americans earned independent 1099 income in 2025. Nobody withholds tax for them.",
+    src: "MBO Partners, State of Independence 2025",
+  },
+  {
+    big: "~14M",
+    text: "taxpayers were hit with the estimated-tax underpayment penalty in one year: about $7B in total.",
+    src: "IRS Data Book FY2023 (via Fox Business)",
+  },
+  {
+    big: "37%",
+    text: "of US adults couldn’t cover a surprise $400 bill with cash. A surprise April tax bill is often $3,000+.",
+    src: "Federal Reserve SHED 2025",
+  },
+];
+
+const STEPS = [
+  ["Log what you earned", "Type or paste payouts from Upwork, Uber, DoorDash or clients. No bank login, no signup."],
+  [
+    "Get your number",
+    "We run the real 2026 IRS math (SE tax, brackets, QBI, the new no-tax-on-tips deduction) and project your year.",
+  ],
+  [
+    "Stash & pay on time",
+    "Every new payment is split into “yours” and “tax”. Deadlines go to your calendar with the exact amount.",
+  ],
+];
+
+const DIFF = [
+  [
+    "Penalty-proof minimum",
+    "We find the cheapest legal safe harbor (90% of this year or 100–110% of last year) so you keep more cash until April.",
+  ],
+  [
+    "Live penalty counter",
+    "See what you’ve already accrued and what it will be by April, computed day by day like IRS Form 2210.",
+  ],
+  ["Uneven income friendly", "Built for gig and freelance paychecks: each payout updates your set-aside rate instantly."],
+  [
+    "Private by design",
+    "All math runs in your browser. Your plan is saved locally or in a private link, never on our servers.",
+  ],
+];
 
 export default function Home() {
   return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
-
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+    <div className="min-h-screen">
+      <header className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4">
+        <div className="flex items-center gap-2 font-semibold">
+          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand text-sm font-bold text-brand-ink">
+            $
+          </span>
+          Stash1099
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
+        <Link href="/plan" className="rounded-lg bg-ink px-4 py-2 text-sm font-semibold text-bg">
+          Open app
+        </Link>
+      </header>
+
+      <section className="mx-auto grid max-w-6xl items-center gap-10 px-4 pb-16 pt-10 lg:grid-cols-[1.3fr_1fr]">
+        <div>
+          <p className="mb-4 inline-block rounded-full bg-brand-soft px-3 py-1 text-sm font-medium text-brand">
+            For US freelancers & gig workers
+          </p>
+          <h1 className="text-4xl font-bold leading-tight tracking-tight sm:text-5xl">
+            Know exactly how much of every paycheck belongs to the IRS.
+          </h1>
+          <p className="mt-5 max-w-xl text-lg text-muted">
+            No employer withholds your taxes, so April brings a bill, plus a penalty for not paying quarterly.
+            Stash1099 tells you what to set aside from each payment and the minimum to pay by each deadline so the
+            penalty is zero.
+          </p>
+          <div className="mt-8 flex flex-wrap gap-3">
+            <Link
+              href="/plan"
+              className="rounded-xl bg-brand px-6 py-3.5 font-semibold text-brand-ink shadow-sm hover:opacity-95"
+            >
+              Build my plan in 60 seconds
+            </Link>
+            <Link
+              href="/plan?demo=maya"
+              className="rounded-xl border border-line bg-surface px-6 py-3.5 font-semibold hover:bg-surface-2"
+            >
+              See a real example →
+            </Link>
+          </div>
+          <p className="mt-3 text-sm text-muted">Free · No signup · Nothing leaves your browser</p>
+        </div>
+        <div className="space-y-3">
+          <Countdown />
+          <div className="rounded-2xl border border-line bg-surface p-5 shadow-sm">
+            <div className="text-sm text-muted">Maya, a freelance designer, just got paid $1,200</div>
+            <div className="mt-3 grid grid-cols-2 gap-2 text-center">
+              <div className="rounded-xl bg-surface-2 p-3">
+                <div className="text-xs text-muted">Hers to spend</div>
+                <div className="tnum text-2xl font-bold">$998</div>
+              </div>
+              <div className="rounded-xl bg-brand p-3 text-brand-ink">
+                <div className="text-xs opacity-80">Tax savings</div>
+                <div className="tnum text-2xl font-bold">$202</div>
+              </div>
+            </div>
+            <div className="mt-3 rounded-xl bg-danger-soft p-3 text-sm text-danger">
+              She missed 2 quarterly payments: <b>$49 penalty already</b>, $153 by April if she does nothing.
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="border-y border-line bg-surface">
+        <div className="mx-auto grid max-w-6xl gap-6 px-4 py-12 sm:grid-cols-3">
+          {STATS.map((s) => (
+            <div key={s.big}>
+              <div className="tnum text-4xl font-bold">{s.big}</div>
+              <p className="mt-2 text-muted">{s.text}</p>
+              <p className="mt-2 text-xs text-muted">{s.src}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="mx-auto max-w-6xl px-4 py-16">
+        <h2 className="text-3xl font-bold tracking-tight">How it works</h2>
+        <ol className="mt-8 grid gap-4 sm:grid-cols-3">
+          {STEPS.map(([t, d], i) => (
+            <li key={t} className="rounded-2xl border border-line bg-surface p-5">
+              <span className="text-sm font-semibold text-brand">Step {i + 1}</span>
+              <h3 className="mt-1 text-lg font-semibold">{t}</h3>
+              <p className="mt-2 text-muted">{d}</p>
+            </li>
+          ))}
+        </ol>
+      </section>
+
+      <section className="mx-auto max-w-6xl px-4 pb-16">
+        <h2 className="text-3xl font-bold tracking-tight">Not another tax calculator</h2>
+        <div className="mt-8 grid gap-4 sm:grid-cols-2">
+          {DIFF.map(([t, d]) => (
+            <div key={t} className="rounded-2xl border border-line bg-surface p-5">
+              <h3 className="font-semibold">{t}</h3>
+              <p className="mt-2 text-muted">{d}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="mx-auto max-w-6xl px-4 pb-20">
+        <h2 className="text-3xl font-bold tracking-tight">Pricing</h2>
+        <div className="mt-8 grid gap-4 sm:grid-cols-2">
+          <div className="rounded-2xl border border-line bg-surface p-6">
+            <h3 className="text-lg font-semibold">Free</h3>
+            <div className="tnum mt-2 text-4xl font-bold">$0</div>
+            <ul className="mt-4 space-y-2 text-muted">
+              <li>✓ Full 2026 tax plan & safe-harbor minimum</li>
+              <li>✓ Penalty counter & quarterly schedule</li>
+              <li>✓ Calendar export</li>
+            </ul>
+          </div>
+          <div className="rounded-2xl border-2 border-brand bg-surface p-6">
+            <h3 className="text-lg font-semibold">Pro</h3>
+            <div className="mt-2 text-4xl font-bold">
+              <span className="tnum">$8</span>
+              <span className="text-base font-normal text-muted">/month · or $59/year</span>
+            </div>
+            <ul className="mt-4 space-y-2 text-muted">
+              <li>✓ SMS nudge with the exact amount on every payout & deadline</li>
+              <li>✓ Exact state tax for all 50 states</li>
+              <li>✓ Annualized-income method for very lumpy years</li>
+              <li>✓ One-click export for your CPA</li>
+            </ul>
+            <p className="mt-4 text-sm text-muted">Avoiding one average IRS penalty (~$500) pays for 5+ years.</p>
+          </div>
+        </div>
+        <div className="mt-10 text-center">
+          <Link href="/plan" className="rounded-xl bg-brand px-6 py-3.5 font-semibold text-brand-ink">
+            Build my plan now
+          </Link>
+        </div>
+      </section>
+
+      <footer className="border-t border-line py-8 text-center text-xs text-muted">
+        Stash1099 gives estimates using published IRS rules for tax year 2026. It is not tax, legal or financial
+        advice.
       </footer>
     </div>
   );
